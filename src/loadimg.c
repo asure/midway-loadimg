@@ -1271,6 +1271,8 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
     fprintf(fp, "%s:\r\n", ie->name);
 
     /* Write IHDR fields as specified by IHDR> directive */
+
+    /* Write IHDR fields as specified by IHDR> directive */
     int have_pal = (g.pon && ie->pal_name[0]);
     int word_buf[32];
     int n_words = 0;
@@ -1434,7 +1436,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
 
         char name[MAX_NAME];
         int ni = 0;
-        int scale_n = 2;
+        int scale_n = 1;
 
         while (*p && *p != ':' && *p != '*' && *p != ',' && *p != '\r' && *p != '\n')
             name[ni++] = *p++;
