@@ -1,6 +1,8 @@
 output*/
 work*/
 ref*/
+lod/
+seq/
 build/
 build_win/
 *.IRW
