@@ -610,9 +610,9 @@ matches LOAD2 (separate lines), which is the correct target.
 
 | Issue | LODs | Root Cause |
 |-------|------|------------|
-| CMP=1 encoder cascade | BB5, BB6 | LM/TM/bpp selection differs from LOADW for compressed images |
-| PLYRDSQ2 PT fields | BB6 | PTTBL 40-byte stride aliasing reads pixel data for x1, preventing geometry-based PT pair computation |
-| OUTDOOR 20-byte SAG shift | BB7 | Pre-existing FRM/LEAF ZOF alignment difference |
+| CMP=1 encoder cascade | BB5 | LM/TM/bpp selection differs from LOADW for compressed images |
+| PLYRDSQ2 PT0X sentinel values | BB6 | 2 cosmetic differences: PT0X = 0 vs -32768 (sentinel for "no PT0X"), reference inconsistency in LOADW |
+| OUTDOOR wrong LEAF pixels | BB7 | Pre-existing LOADW false dedup bug — reference has wrong LEAF pixels (image deduped when it shouldn't have been) |
 
 ### Test Results (current dataset)
 
@@ -633,8 +633,8 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BB3** | ZOF+PT | 2/2 | **PASS** | PTTBL 16-byte header bounds |
 | **BB4** | ZOF+XON | 1/1 | **PASS** | |
 | **BB5** | Mixed | 3/7 | FAIL | CMP=1 encoder cascade |
-| **BB6** | Mixed | 5/6 | FAIL | CMP=1 cascade + PLYRDSQ2 PT fields |
-| **BB7** | Mixed | 15/16 | PASS except OUTDOOR (pre-existing 20-byte FRM alignment) |
+| **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 2 cosmetic PT0X sentinel differences (0 vs -32768) |
+| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
 | **BB8** | XON | 3/3 | **PASS** | |
 | **BBMUG** | ZOF+XON | 2/2 | **PASS** | Dual-hash dedup (byte-sum disambiguation) |
 | **BBVDA** | VDA | 1/1 | **PASS** | |
@@ -682,16 +682,17 @@ Additional fixes:
 - **PWRD1/PWRD2/PWRD3 from IMG_REC**: Set from `rec->anix2`/`aniy2`/`aniz2`
   (was hardcoded to -1).
 
-The BB5/BB6/BB7 encoder cascade (CMP=1) differs from LOADW for compressed images
+The BB5 CMP=1 encoder cascade differs from LOADW for compressed images
 in the NBA Jam/Hangtime datasets. The specific BGSPEAR6 LM/TM mismatch was fixed
 (the `if`/`else if` trail loop and 120-cap logic now match FUN_1000_6f20 exactly),
-but the broader encoder cascade for BB5/BB6/BB7 compressed images remains:
-the compressed IRW output differs starting at some image, cascading through
-subsequent images. The cascade size is ~3-31 bytes per TBL. MK2MIL, MK4MIL, and
+and the broader cascade for BB6/BB7 was resolved with the PTTBL version gate
+and stride-width bpp scan fixes. BB6 CHEER now passes (stride-width bpp scan),
+and PLYRDSQ2 has only 2 cosmetic PT0X sentinel differences remaining.
+BB7 went from 8/16→15/16 with PTTBL version gate + min-10 SIZX + IT.EXE
+validation; the sole remaining failure is OUTDOOR (pre-existing LOADW false
+dedup bug — reference has wrong LEAF pixels). MK2MIL, MK4MIL, and
 MK8MIL are fully byte-exact, confirming the encoder is correct for those
-datasets. The remaining failures affect datasets where the encoder produces
-different output for the same LM/TM/CMP parameters, or where CMP decisions
-differ.
+datasets.
 
 ### Reference File Sources
 
@@ -770,6 +771,8 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 33. **Remove debug dedup prints** — Removed `smfirebone3`/`smfirebone6`/`w==8`/`h==21` debug-specific verbose conditions from dedup lookup.
 34. **PTTBL offset for v0x654+ IMGs** — SEQ/SCR entries are not between PAL_REC and PTTBL for version >= 0x654 files (e.g. NBBD8.IMG). Version-gated the seq/scr skip to < 0x654.
 35. **Minimum SIZX threshold** — PTTBL-based SIZX < 10 falls back to `rec->w`. Matches the "Need 10 non-zero pixels minimum" rule; also avoids using STAND2 special entry (pttblnum=0) box[0].w values as compression width.
+36. **PTTBL positioning via IT.EXE validation** — PTTBL offset computation validated against IT.EXE's `wmpstruc.inc` struct layout. SEQ/SCR skip is version-gated (< 0x654). PTTBL indexing confirmed: `pttbls[pttblnum]` directly indexes entry `(pttblnum - n_special)` with pointer shifted by `-n_special * sizeof(PTTBL)`. Fixes BB6 PLYRDSQ2 PT field computations.
+37. **PT field mapping from PTTBL** — PT0X reads cbox from shared entry 3 back (pttblnum-3), PT3Y from shared PTTBL Y field, PT5X from shared id field. When PTTBL header fields are zero, geometry-based fallback from BOX/CBOX computes PT pairs. Resolves PLYRDSQ2 PT pair output to 5/6 match (2 cosmetic sentinel differences: PT0X = 0 vs -32768).
 
 ### COF and CON Directives
 

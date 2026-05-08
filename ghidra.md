@@ -20,8 +20,9 @@ ZOF mode is **byte-exact** with LOADW across all tested datasets:
 
 | Issue | LODs | Status |
 |-------|------|--------|
-| CMP=1 encoder LM/TM selection | BB5, BB6, BB7 | Differs from LOADW for some compressed images |
-| 16-bit checksum collision | BBMUG | 1/65536 collision on mugshot images |
+| CMP=1 encoder LM/TM selection | BB5 | Differs from LOADW for some compressed images |
+| PLYRDSQ2 PT0X sentinel values | BB6 | Cosmetic: PT0X = 0 vs -32768 (LOADW sentinel inconsistency) |
+| OUTDOOR wrong LEAF pixels | BB7 | Pre-existing LOADW false dedup bug |
 
 ## Ghidra Setup & Usage
 

@@ -287,8 +287,9 @@ Key ZOF fixes:
 
 | Issue | Affected LODs | Root Cause |
 |-------|---------------|------------|
-| CMP=1 encoder cascade | BB5, BB6, BB7 | LM/TM/bpp selection differs for compressed images |
-| PLYRDSQ2 PT field computation | BB6 | PTTBL 40-byte stride aliasing prevents geometry fallback |
+| CMP=1 encoder cascade | BB5 | LM/TM/bpp selection differs for compressed images |
+| PLYRDSQ2 PT0X sentinel values | BB6 | 2 cosmetic differences: PT0X = 0 vs -32768; reference inconsistency in LOADW |
+| OUTDOOR wrong LEAF pixels | BB7 | Pre-existing LOADW false dedup bug (reference has wrong LEAF pixels) |
 
 ## CON> Checksum Dedup
 
