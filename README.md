@@ -255,3 +255,13 @@ The original LOADIMG was created by Warren B. Davis around 1988 for Y-Unit hardw
 - DMA2 hardware documentation: **Keep Enterprises**, Jan 1992
 - Original struct definitions: **Midway Manufacturing** (`wmpstruc.inc`, `itimg.asm`)
 - Test data extracted from **Mortal Kombat 2**, **NBA Jam**, **NBA Jam Tournament Edition**, and **Hangtime** arcade ROMs
+
+---
+
+## Version History
+
+### v0.9 (Latest)
+- Fixed `BBMUG` 16-bit checksum collisions causing false deduplication matches by adding a `sum2` byte-sum dual-hash mechanism.
+- Fixed `BB6 CHEER` bpp selection by properly scanning the stride-width pixel buffer (matching LOADW's handling of padding artifacts).
+- Fixed `BB7` cascade failures by gating the PTTBL `seq`/`scr` offset skip to `< v0x654` and enforcing a minimum SIZX threshold of 10.
+- Added `-v` and `--version` CLI flags.
