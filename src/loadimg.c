@@ -265,6 +265,7 @@ typedef struct {
     int      bpp_from_pal;
     int      append;
     int      ppp;
+    int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
 
     char     imgdir[MAX_PATH];
     char     tbldir[MAX_PATH];
@@ -525,6 +526,7 @@ static ImgFile* img_load_try(const char *dir, const char *fname) {
 }
 
 static ImgFile* img_load(const char *path) {
+    g.ite_pttbl = 0;
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
 
@@ -631,7 +633,41 @@ static ImgFile* img_load(const char *path) {
      * v0x654+ stores PTTBL before SEQ/SCR entries; older versions store after. */
     int n_seqscr = (int)img->hdr.seqcnt + (int)img->hdr.scrcnt;
     if (n_seqscr > 0 && img->hdr.version < 0x654) {
+        /* Standard position: skip only 98-byte SEQSCR headers (no frame data). */
         pttbl_ofs += (uint32_t)n_seqscr * 98;
+        g.ite_pttbl = 0;
+
+        /* Validate standard position: count entries with out-of-range A3X/A3Z/id. */
+        int std_bad = 0;
+        for (int ei = 0; ei < 10 && pttbl_ofs + 40 <= img->size; ei++) {
+            int16_t X = *(int16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 8);
+            int16_t Z = *(int16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 12);
+            uint16_t id = *(uint16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 14);
+            if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
+                std_bad++;
+        }
+        if (std_bad > 0 && img->n_palettes > 3) {
+            uint32_t it_base = pal_ofs + (uint32_t)(img->n_palettes - 3) * sizeof(PAL_REC);
+            uint32_t p = it_base;
+            int ok = 1;
+            for (int i = 0; i < n_seqscr; i++) {
+                if (p + 20 > img->size) { ok = 0; break; }
+                uint16_t num = *(uint16_t*)(img->data + p + 18);
+                if (num > 255) { ok = 0; break; }
+                p += 98 + (uint32_t)num * 18;
+            }
+            if (ok && p + 40 <= img->size) {
+                int it_bad = 0;
+                for (int ei = 0; ei < 10 && p + 40 <= img->size; ei++) {
+                    int16_t X = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 8);
+                    int16_t Z = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 12);
+                    uint16_t id = *(uint16_t*)(img->data + p + (uint32_t)ei * 40 + 14);
+                    if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
+                        it_bad++;
+                }
+                if (it_bad < std_bad) { pttbl_ofs = p; g.ite_pttbl = 1; }
+            }
+        }
     }
 
     /* Compute max PTTBL index */
@@ -1198,24 +1234,29 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     case IHDR_PWRD2: return ie->pwrd2;
     case IHDR_PWRD3: return ie->pwrd3;
     /* PT IHDR fields: LOADW tries shared PTTBL header fields first, then own entry's
-     * box[0]/box[1] fields as fallback (when header fields are all zero). */
-    case IHDR_PT0X: { PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; return p ? (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)) : -1; }
+     * box[0]/box[1] fields as fallback (when header fields are all zero).
+     * When g.ite_pttbl is set, use own entry fields per IT.EXE (itimg.asm:2338-2351). */
+    case IHDR_PT0X: { PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; if (g.ite_pttbl) return -32768; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
     case IHDR_PT2X: {
+        if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->X;
         if (ie->pttbl_shared && ie->pttbl_shared->x2) return (int)ie->pttbl_shared->x2;
         if (ie->pttbl) return (int)ie->pttbl->id;
         return -1;
     }
     case IHDR_PT2Y: {
+        if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->Y;
         if (ie->pttbl_shared && ie->pttbl_shared->x3) return (int)ie->pttbl_shared->x3;
         if (ie->pttbl) return (int)(int8_t)ie->pttbl->box[0].x;
         return -1;
     }
     case IHDR_PT3X: {
+        if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->Z;
         if (ie->pttbl_shared && ie->pttbl_shared->X) return (int)ie->pttbl_shared->X;
         if (ie->pttbl) return (int)(int8_t)ie->pttbl->box[0].w;
         return 0;
     }
     case IHDR_PT3Y: {
+        if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->id;
         if (ie->pttbl_shared && ie->pttbl_shared->Y) return (int)ie->pttbl_shared->Y;
         if (ie->pttbl) return (int)(int8_t)ie->pttbl->box[1].x;
         return 0;
