@@ -163,6 +163,16 @@ Each compressed row: 1 header byte `[trail_n:4][lead_n:4]` + stored pixels at `b
 
 4. **IRW Writing** — Flushes the bit-packed header and data to disk.
 
+### Asset Size Limits
+
+Dimensions observed across the full dataset (sprites + backgrounds), excluding VDA development artifacts and `!`-prefixed special records:
+
+| Category | Max Width | Max Height | Example |
+|----------|-----------|------------|---------|
+| Sprite (IMG) | 414px | 255px | TRANSBAR.IMG (transition bar) |
+| BDD background tile | 212px | 221px | TEAMSTAT.BDD (team stats) |
+| BDB scrolling world | 2000px | 1500px | Playfield coordinate system |
+
 ---
 
 ## Test Suite
