@@ -266,6 +266,7 @@ typedef struct {
     int      append;
     int      ppp;
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
+    int      old_mode;   /* 1 if /OLD flag: legacy LOAD.EXE output (no IHDR, SAG+PAL on same .long, RLC>) */
 
     char     imgdir[MAX_PATH];
     char     tbldir[MAX_PATH];
@@ -1295,7 +1296,29 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                     int dbank = g.base_addr >= 0x2000000 ? (int)((g.base_addr - 0x2000000) / 0x4000000) : 0;
                     base += (uint32_t)dbank * 0x2000000;
                 }
-                fprintf(fp, "0%xH\r\n", base + ie->sag);
+                /* /OLD mode: check if PAL:L immediately follows SAG:L */
+                int next_is_pal = 0;
+                if (g.old_mode) {
+                    for (int ni = i + 1; ni < g.n_ihdr; ni++) {
+                        int nf = g.ihdr[ni].field;
+                        if (nf == IHDR_PAL && !g.pon) continue;
+                        if (nf == IHDR_PAL && g.ihdr[ni].size == SZ_L) next_is_pal = 1;
+                        break;
+                    }
+                }
+                if (next_is_pal) {
+                    if (have_pal)
+                        fprintf(fp, "0%xH,%s\r\n", base + ie->sag, ie->pal_name);
+                    else
+                        fprintf(fp, "0%xH,-1\r\n", base + ie->sag);
+                    /* Skip the PAL field in the main loop */
+                    for (int ni = i + 1; ni < g.n_ihdr; ni++) {
+                        int nf = g.ihdr[ni].field;
+                        if (nf == IHDR_PAL) { i = ni; break; }
+                    }
+                } else {
+                    fprintf(fp, "0%xH\r\n", base + ie->sag);
+                }
             } else if (f == IHDR_PAL) {
                 if (have_pal)
                     fprintf(fp, "%s\r\n", ie->pal_name);
@@ -1935,7 +1958,10 @@ static void process_lod(const char *lod_path) {
     CurrentImg cur;
     memset(&cur, 0, sizeof(cur));
 
-    parse_ihdr("IHDR SIZX:W,SIZY:W,ANIX:W,ANIY:W,SAG:L,CTRL:W,PAL:L,PWRD1:W,PWRD2:W,PWRD3:W,PT3Y:W");
+    if (g.old_mode)
+        parse_ihdr("IHDR SIZX:W,SIZY:W,ANIX:W,ANIY:W,SAG:L,PAL:L");
+    else
+        parse_ihdr("IHDR SIZX:W,SIZY:W,ANIX:W,ANIY:W,SAG:L,CTRL:W,PAL:L,PWRD1:W,PWRD2:W,PWRD3:W,PT3Y:W");
 
     while (fgets(line, sizeof(line), f)) {
         str_trim(line);
@@ -2715,9 +2741,10 @@ static void process_lod(const char *lod_path) {
             free(bdd_data);
         }
 
-else if (!strncmp(upper, "MON>", 4)) { }
+        else if (!strncmp(upper, "MON>", 4)) { }
         else if (!strncmp(upper, "BON>", 4)) { }
         else if (!strncmp(upper, "ROM>", 4)) { }
+        else if (!strncmp(upper, "RLC>", 4)) { /* Old-format run-length encoding flag — fallback to raw encoding */ }
         else if (!strncmp(upper, "--->", 4)) {
             if (cur.imgfile) parse_imglist(line, &cur, 0);
         }
@@ -2806,12 +2833,15 @@ static void print_usage(const char *arg) {
     printf("  /B         bpp from palette size\n");
     printf("  /3         Limit scales to 3\n");
     printf("  /A         Append mode (don't overwrite existing tables)\n");
+    printf("  /OLD       Legacy LOAD.EXE mode for older games (Narc, Trog).\n");
+    printf("               Old-style output: no CTRL field, SAG+PAL on same .long line,\n");
+    printf("               RLC> run-length encoding directive.\n");
     printf("  /H         This help\n");
     printf("\n");
     if (arg) {
         printf("Unknown argument: %s\n", arg);
         printf("Did you mean one of these?\n");
-        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /H\n");
+        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /OLD, /H\n");
         printf("\n");
     }
     printf("Example:\n");
@@ -2841,6 +2871,10 @@ int main(int argc, char *argv[]) {
             return 0;
         }
         if (a[0] == '/') {
+            /* Multi-char flags before single-char switch */
+            { char abuf[64]; strncpy(abuf, a, 63); abuf[63] = 0; upcase(abuf);
+              if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; } }
+
             char flag = (char)toupper((unsigned char)a[1]);
             char *val = a + 2;
 

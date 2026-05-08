@@ -101,6 +101,7 @@ loadimg <lod_file> [flags]
 | `/B` | Derive bpp from pixel data, not palette size |
 | `/3` | Limit LOD scales to 3 (full, half, quarter, no eighth) |
 | `/A` | Append mode — append new entries to existing GLO/TBL files |
+| `/OLD` | Legacy LOAD.EXE mode — old-style output for Narc, Trog. No CTRL field, SAG+PAL on same `.long` line, `RLC>` run-length encoding directive. |
 
 Output filenames derive from the LOD base name (uppercased):
 
