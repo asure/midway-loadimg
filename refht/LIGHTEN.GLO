@@ -1,8 +1,0 @@
-	.globl	ligtn_p
-	.global	lighten1
-	.global	lighten2
-	.global	lighten3
-	.global	lighten4
-	.global	lighten5
-	.global	lighten6
-	.global	lighten7

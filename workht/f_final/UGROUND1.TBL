@@ -1,5 +1,0 @@
-	.DATA
-UGROUND2	.set	06000000h
-BLUFLOOR	.set	061ef900h
-	.TEXT
-

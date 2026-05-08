@@ -1,0 +1,11 @@
+output*/
+work*/
+ref*/
+build/
+build_win/
+*.IRW
+*.TBL
+*.ASM
+*.GLO
+BGNDEQU.H
+L2TEMP
