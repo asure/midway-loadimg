@@ -558,8 +558,9 @@ The cluster contains 5 null-terminated format strings used sequentially:
 ### CTRL+PWRD line formatting
 
 LOADW outputs CTRL and PWRD1/2/3/PT3Y on a single `.word` line
-(e.g. `06580H,-1,-1,-1,0`). LOAD2 outputs them on separate lines. Our implementation
-matches LOAD2 (separate lines), which is the correct target.
+(e.g. `06580H,-1,-1,-1,0`). Since v0.91, `write_image_tbl` follows the IHDR>
+directive dynamically — CTRL is no longer hardcoded to its own line, so
+consecutive `:W` fields share a `.word` line matching LOADW's output.
 
 ## Implementation Status
 
@@ -605,14 +606,18 @@ matches LOAD2 (separate lines), which is the correct target.
 | DOS path basename | ✓ | Extracts filename from `c:\path\to\file.IMG` |
 | make regen | ✓ | DOSBox-based reference regeneration |
 | Cross-platform | ✓ | Linux + Windows (MinGW) |
+| Old-format palette offset | ✓ | v0.91 — 42-byte rec_size for `pal_ofs` instead of `IMG_REC_SIZE` |
+| IHDR> dynamic field output | ✓ | v0.91 — CTRL no longer hardcoded; fields grouped by IHDR spec |
+| WWF test data | ✓ | v0.91 — MAIN.LOD, MISC.LOD with LOADW references |
 
 ### Remaining Issues
 
 | Issue | LODs | Root Cause |
 |-------|------|------------|
-| CMP=1 encoder cascade | BB5 | LM/TM/bpp selection differs from LOADW for compressed images |
+| CMP=1 encoder cascade | BB5, BB6, BB7, WWF | LM/TM/bpp selection differs from LOADW for compressed images |
 | PLYRDSQ2 PT0X sentinel values | BB6 | 2 cosmetic differences: PT0X = 0 vs -32768 (sentinel for "no PT0X"), reference inconsistency in LOADW |
 | OUTDOOR wrong LEAF pixels | BB7 | Pre-existing LOADW false dedup bug — reference has wrong LEAF pixels (image deduped when it shouldn't have been) |
+| WWF TBL format | BAM, MAIN, MISC | `/SEQ` mode needed: PTTBL-based SIZX, scale count, PT pairs, scale SAG/CTRL |
 
 ### Test Results (current dataset)
 
@@ -639,6 +644,8 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BBMUG** | ZOF+XON | 2/2 | **PASS** | Dual-hash dedup (byte-sum disambiguation) |
 | **BBVDA** | VDA | 1/1 | **PASS** | |
 | **MISC** | Mixed | 21/21 | **PASS** | NBA Jam/Hangtime |
+
+**15 pass, 4 fail** (v0.91). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -773,6 +780,8 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 35. **Minimum SIZX threshold** — PTTBL-based SIZX < 10 falls back to `rec->w`. Matches the "Need 10 non-zero pixels minimum" rule; also avoids using STAND2 special entry (pttblnum=0) box[0].w values as compression width.
 36. **PTTBL positioning via IT.EXE validation** — PTTBL offset computation validated against IT.EXE's `wmpstruc.inc` struct layout. SEQ/SCR skip is version-gated (< 0x654). PTTBL indexing confirmed: `pttbls[pttblnum]` directly indexes entry `(pttblnum - n_special)` with pointer shifted by `-n_special * sizeof(PTTBL)`. Fixes BB6 PLYRDSQ2 PT field computations.
 37. **PT field mapping from PTTBL** — PT0X reads cbox from shared entry 3 back (pttblnum-3), PT3Y from shared PTTBL Y field, PT5X from shared id field. When PTTBL header fields are zero, geometry-based fallback from BOX/CBOX computes PT pairs. Resolves PLYRDSQ2 PT pair output to 5/6 match (2 cosmetic sentinel differences: PT0X = 0 vs -32768).
+38. **Old-format palette offset (v0.91)** — Fixed `pal_ofs` computation for 42-byte IMG_REC files. The conversion was adding both `n*42` (via adjusted `oset`) and `n*IMG_REC_SIZE` (via the palette formula), producing `old_oset + n*92` instead of `old_oset + n*42`. Fixes palette lookups in WWF font files (TROGF15.IMG, TROGF7.IMG).
+39. **Dynamic IHDR output (v0.91)** — Removed hardcoded `CTRL` special case in `write_image_tbl`. The IHDR> directive now fully controls field ordering, grouping (`:W` fields share `.word` lines, `:L` fields get their own line), and formatting (CTRL as hex, others as decimal). Fixes line grouping when PAL:L is skipped via `POF>`.
 
 ### COF and CON Directives
 

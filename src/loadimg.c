@@ -21,7 +21,7 @@
 #include <ctype.h>
 #include <math.h>
 
-#define VERSION "0.9"
+#define VERSION "0.91"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -578,10 +578,8 @@ static ImgFile* img_load(const char *path) {
             r->opals    = (uint16_t)0xffff;
         }
         img->norm_images = norm;
-        /* Update oset to point past the old records so palette/PAL_REC
-         * offsets are computed correctly from the old record table size. */
-        img->hdr.oset = old_oset + (uint32_t)n * 42;
-        /* Patch hdr so rest of img_load works: adjust oset to skip old records */
+        /* For old format, keep oset pointing to the original record table.
+         * Palette offset uses 42-byte records, not IMG_REC_SIZE (50). */
         img->hdr.temp    = 0xabcd;
         img->hdr.version = 0x634;
         img->hdr.seqcnt  = 0;
@@ -589,12 +587,16 @@ static ImgFile* img_load(const char *path) {
     }
 
     uint32_t oset = img->hdr.oset;
+    int is_old_fmt = (img->norm_images != NULL);
 
+    /* Old-format IMGs have no !-prefixed special records */
     int n_special = 0;
-    for (int i = 0; i < 10; i++) {
-        IMG_REC *rec = (IMG_REC*)(img->data + oset + i * (int)IMG_REC_SIZE);
-        if (rec->name[0] == '!') n_special++;
-        else break;
+    if (!is_old_fmt) {
+        for (int i = 0; i < 10; i++) {
+            IMG_REC *rec = (IMG_REC*)(img->data + oset + i * (int)IMG_REC_SIZE);
+            if (rec->name[0] == '!') n_special++;
+            else break;
+        }
     }
 
     img->n_special = n_special;
@@ -604,8 +606,10 @@ static ImgFile* img_load(const char *path) {
         img->images = (IMG_REC*)(img->data + oset + n_special * IMG_REC_SIZE);
     img->n_images = img->hdr.imgcnt - n_special;
 
-    /* Palette records: stored with 3 defaults prepended */
-    uint32_t pal_ofs = oset + (uint32_t)img->hdr.imgcnt * (uint32_t)IMG_REC_SIZE;
+    /* Palette records: stored with 3 defaults prepended.
+     * Old format uses 42-byte records, not IMG_REC_SIZE (50). */
+    int rec_size = is_old_fmt ? 42 : (int)IMG_REC_SIZE;
+    uint32_t pal_ofs = oset + (uint32_t)img->hdr.imgcnt * (uint32_t)rec_size;
     img->pals = (PAL_REC*)(img->data + pal_ofs);
     img->n_palettes = img->hdr.palcnt;
 
@@ -1266,76 +1270,75 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     }
 }
 
-/* Write one image entry to TBL file */
+/* Write one image entry to TBL file, following the IHDR> directive exactly.
+ * Fields are output in IHDR order. SZ_W fields are comma-separated on .word lines;
+ * SZ_L fields get their own .long line. The line breaks follow the IHDR spec:
+ * consecutive SZ_W fields share a line, SZ_L fields force a new line.
+ * All skipped fields (PAL when POF>) are omitted entirely. */
 static void write_image_tbl(FILE *fp, ImageEntry *ie) {
     fprintf(fp, "%s:\r\n", ie->name);
 
-    /* Write IHDR fields as specified by IHDR> directive */
-
-    /* Write IHDR fields as specified by IHDR> directive */
     int have_pal = (g.pon && ie->pal_name[0]);
-    int word_buf[32];
-    int n_words = 0;
 
     for (int i = 0; i < g.n_ihdr; i++) {
         int f = g.ihdr[i].field;
         FieldSize sz = g.ihdr[i].size;
 
+        /* Skip PAL entirely when POF> active */
         if (f == IHDR_PAL && !g.pon) continue;
 
         if (sz == SZ_L) {
-            if (n_words > 0) {
-                fprintf(fp, "\t.word   ");
-                for (int j = 0; j < n_words; j++) {
-                    if (j > 0) fputc(',', fp);
-                    fprintf(fp, "%d", word_buf[j]);
+            fprintf(fp, "\t.long   ");
+            if (f == IHDR_SAG) {
+                uint32_t base = g.base_addr;
+                if (g.dual_bank) {
+                    int dbank = g.base_addr >= 0x2000000 ? (int)((g.base_addr - 0x2000000) / 0x4000000) : 0;
+                    base += (uint32_t)dbank * 0x2000000;
                 }
-                fprintf(fp, "\r\n");
-                n_words = 0;
-            }
-             if (f == IHDR_SAG) {
-                 uint32_t base = g.base_addr;
-                 if (g.dual_bank) {
-                     int dbank = g.base_addr >= 0x2000000 ? (int)((g.base_addr - 0x2000000) / 0x4000000) : 0;
-                     base += (uint32_t)dbank * 0x2000000;
-                 }
-                 fprintf(fp, "\t.long   0%xH\r\n", base + ie->sag);
+                fprintf(fp, "0%xH\r\n", base + ie->sag);
             } else if (f == IHDR_PAL) {
                 if (have_pal)
-                    fprintf(fp, "\t.long   %s\r\n", ie->pal_name);
+                    fprintf(fp, "%s\r\n", ie->pal_name);
                 else
-                    fprintf(fp, "\t.long   -1\r\n");
+                    fprintf(fp, "-1\r\n");
             } else {
-                fprintf(fp, "\t.long   -1\r\n");
+                fprintf(fp, "-1\r\n");
             }
         } else {
-            if (f == IHDR_CTRL) {
-                if (n_words > 0) {
-                    fprintf(fp, "\t.word   ");
-                    for (int j = 0; j < n_words; j++) {
-                        if (j > 0) fputc(',', fp);
-                        fprintf(fp, "%d", word_buf[j]);
-                    }
-                    fprintf(fp, "\r\n");
-                    n_words = 0;
-                }
-                fprintf(fp, "\t.word   0%xH\r\n", ie->ctrl);
-            } else {
-                int val = get_ihdr_word_value(ie, f, 1);
-                word_buf[n_words++] = val;
+            /* SZ_W field: output values comma-separated on one .word line.
+             * Peek ahead: find the run of consecutive SZ_W fields (skipping
+             * PAL when POF> active), then output them all on one line with
+             * per-field formatting. */
+            int n = 0;
+            int vals[32];
+            int is_ctrl[32];
+            int j = i;
+            while (j < g.n_ihdr) {
+                int fj = g.ihdr[j].field;
+                FieldSize szj = g.ihdr[j].size;
+                if (fj == IHDR_PAL && !g.pon) { j++; continue; }
+                if (szj != SZ_W) break;
+                is_ctrl[n] = (fj == IHDR_CTRL);
+                vals[n] = is_ctrl[n] ? (int)(int16_t)ie->ctrl : get_ihdr_word_value(ie, fj, 1);
+                n++;
+                j++;
+                if (n >= 32) break;
             }
+            if (n > 0) {
+                fprintf(fp, "\t.word   ");
+                for (int k = 0; k < n; k++) {
+                    if (k > 0) fputc(',', fp);
+                    if (is_ctrl[k])
+                        fprintf(fp, "0%xH", vals[k]);
+                    else
+                        fprintf(fp, "%d", vals[k]);
+                }
+                fprintf(fp, "\r\n");
+            }
+            i = j - 1;
         }
     }
 
-    if (n_words > 0) {
-        fprintf(fp, "\t.word   ");
-        for (int j = 0; j < n_words; j++) {
-            if (j > 0) fputc(',', fp);
-            fprintf(fp, "%d", word_buf[j]);
-        }
-        fprintf(fp, "\r\n");
-        n_words = 0;
-    }
 }
 
         static void write_global(const char *name) {

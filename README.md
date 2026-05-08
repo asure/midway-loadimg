@@ -23,7 +23,12 @@ A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Elec
 
 ## Version History
 
-### v0.9 (Latest)
+### v0.91 (Latest)
+- Fixed old-format IMG palette offset computation (42-byte → 50-byte conversion was computing `pal_ofs = old_oset + n*92` instead of `old_oset + n*42`). Fixes palette lookups in WWF WrestleMania font files (`TROGF15.IMG`, `TROGF7.IMG`).
+- Made `write_image_tbl` fully dynamic: IHDR> directive now controls field order, grouping, and formatting exactly. Removed hardcoded special case for `CTRL` that broke `.word` line grouping when `PAL:L` was skipped via `POF>`.
+- Added WWF test data (`MAIN.LOD`, `MISC.LOD`) with LOADW reference outputs and verbose logs.
+
+### v0.9
 - Fixed `BBMUG` 16-bit checksum collisions causing false deduplication matches by adding a `sum2` byte-sum dual-hash mechanism.
 - Fixed `BB6 CHEER` bpp selection by properly scanning the stride-width pixel buffer (matching LOADW's handling of padding artifacts).
 - Fixed `BB7` cascade failures by gating the PTTBL `seq`/`scr` offset skip to `< v0x654` and enforcing a minimum SIZX threshold of 10.
@@ -183,7 +188,7 @@ Run `make test` from the build directory. Compares all TBL/ASM/GLO/IRW output ag
 cd build && make test
 ```
 
-### Current Results: 15 pass, 3 fail
+### Current Results: 15 pass, 4 fail
 
 | Test | Mode | TBLs | Result | Notes |
 |------|------|------|--------|-------|
@@ -199,8 +204,8 @@ cd build && make test
 | **BB3** | ZOF+PT | 2/2 | PASS | PTTBL bounds fixed |
 | **BB4** | ZOF+XON | 1/1 | PASS | |
 | **BB5** | Mixed | 3/7 | FAIL | CMP=1 encoder cascade |
-| **BB6** | Mixed | 5/6 | FAIL | CMP=1 cascade + PLYRDSQ2 PT fields |
-| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR SAG shift (pre-existing FRM alignment) |
+| **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 PT0X sentinel (cosmetic) |
+| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
 | **BB8** | XON | 3/3 | PASS | |
 | **BBMUG** | ZOF+XON | 2/2 | PASS | Dual-hash dedup fix |
 | **BBVDA** | VDA | 1/1 | PASS | |
@@ -214,16 +219,18 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 
 | Issue | Scope | Root Cause |
 |-------|-------|------------|
-| **CMP=1 encoder cascade** | BB5, BB6 | LM/TM/bpp selection differs from LOADW for compressed images. Affects compressed IRW output starting at some image, cascading ~3–31 bytes per TBL. MK2MIL/MK4MIL/MK8MIL are fully byte-exact, confirming the encoder is correct for those datasets. |
-| **PLYRDSQ2 PT fields** | BB6 | PTTBL 40-byte stride aliasing reads pixel colour data for `x1` field, preventing geometry-based PT pair computation fallback. |
-| **OUTDOOR 20-byte SAG shift** | BB7 | Pre-existing FRM/LEAF ZOF alignment difference in the NBA Jam dataset. |
-| **16-bit checksum collisions** | LOADW (CON>) | LOADW's word-wise checksum misses the last byte of odd-length buffers, causing false dedup matches on `BBMUG` mugshots and `BB7` leaf sprites (`OUTDOOR`). Fixed in loadimg with a dual-hash (word-sum + byte-sum). |
-| **PTTBL dense stride** | LOADW | PTTBL data stored at 12-byte stride in IMG files but LOADW reads at 40-byte stride, causing aliasing that reads palette colour data or IMG_REC name fields for high index entries. loadimg version-gates the SEQ/SCR skip and enforces a minimum SIZX threshold. |
-| **BPP from stride-width** | LOADW | LOADW computes bpp from stride-width pixels (including padding bytes), not just image width. loadimg matches this behavior. |
-| **FRM> word alignment** | LOADW | Movie footage (`FRM>`) uses word alignment *after* each entry, matching LOADW's byte-exact IRW layout. |
-| **PAL_REC offset bug** | LOADW | Adding `n_special` again to palette offset caused a 100-byte overrun (2 records × 50 bytes). loadimg correctly uses `imgcnt` directly. |
+| **CMP=1 encoder cascade** | BB5, BB6, BB7, WWF | LM/TM/bpp selection differs from LOADW for compressed images. Affects compressed IRW output starting at some image, cascading through all subsequent TBLs. MK2MIL/MK4MIL/MK8MIL are fully byte-exact, confirming the encoder is correct for those datasets. |
+| **PLYRDSQ2 PT0X sentinel** | BB6 | 2 cosmetic differences: PT0X = 0 vs -32768 (LOADW sentinel inconsistency) |
+| **OUTDOOR false dedup** | BB7 | Pre-existing LOADW dedup bug — reference has wrong LEAF pixels |
+| **Old-format palette offset** | LOADW | 42-byte to 50-byte IMG_REC conversion computed palette offset incorrectly (`pal_ofs = oset + n*92` instead of `oset + n*42`). Fixed in v0.91. |
+| **IHDR> field grouping** | LOADW | Hardcoded `CTRL` special case in `write_image_tbl` broke `.word` line grouping when `PAL:L` was skipped. Fixed in v0.91 — IHDR> now fully dynamic. |
+| **16-bit checksum collisions** | LOADW | LOADW's word-wise checksum misses the last byte of odd-length buffers, causing false dedup matches on `BBMUG` mugshots. Fixed in loadimg with a dual-hash (word-sum + byte-sum). |
+| **PTTBL dense stride** | LOADW | PTTBL data stored at 12-byte stride but LOADW reads at 40-byte stride. loadimg version-gates the SEQ/SCR skip and enforces a minimum SIZX threshold. |
+| **BPP from stride-width** | LOADW | LOADW computes bpp from stride-width pixels (including padding bytes). loadimg matches this behavior. |
+| **FRM> word alignment** | LOADW | Movie footage uses word alignment *after* each entry. loadimg matches. |
+| **PAL_REC offset bug** | LOADW | Adding `n_special` again to palette offset caused a 100-byte overrun. loadimg correctly uses `imgcnt` directly. |
 
-The BB5/BB6/BB7 compressed encoder cascade is the primary remaining open issue. All MK2 datasets and NBA Jam/Hangtime ZOF/XON images pass fully.
+The CMP=1 encoder cascade is the primary remaining open issue, affecting BB5/BB6/BB7 and some WWF images.
 
 ---
 
