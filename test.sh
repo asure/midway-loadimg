@@ -64,6 +64,9 @@ test_lod workArt refArt BB8 "PLYRRSEQ PLYRHD6 MUGSHOT8"
 test_lod workArt refArt BBMUG "PLYRHD3 PLYRHD5"
 test_lod workArt refArt BBVDA "BBVDA"
 
+# workwwf: WWF WrestleMania arcade data
+test_lod workwwf refwwf BAM "BAMIMG"
+
 # BBPAL is palette-only (ASM> junkxxxx, no TBL output)
 # workht: misc.lod from NBA Jam/Hangtime (headerless, dual-bank)
 test_lod_workht() {
