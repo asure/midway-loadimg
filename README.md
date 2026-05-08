@@ -35,7 +35,7 @@ The Midway arcade toolchain stored game sprites and backgrounds in **IMG contain
 | `.IRW` | Bit-packed compressed (or raw) image binary ready for DMA transfer |
 | `BGNDTBL.ASM` / `BGNDPAL.ASM` / `BGNDEQU.H` | Background layer tables (from `BBB>` directive, MK2 stage backgrounds) |
 
-The output is assembled by the Midway TMS34020 toolchain (`asm20`) and burned into EPROMs for the arcade hardware.
+The output is assembled by the TI TMS34010 toolchain (`gspa / gsplnk`) and GFX are burned into EPROMs for the arcade hardware.
 
 ---
 
@@ -248,6 +248,8 @@ The DMA2 compression format is documented in **`DMA2.DOC`** (Keep Enterprises, J
 ---
 
 ## Credits
+
+The original LOADIMG was created by Warren B. Davis around 1988 for Y-Unit hardware. Possibly other developers updated it for Wolf Unit/DMA2. Thank you! You've made our lives better with the tools that helped build games that excited and shaped our life during the 80's and 90's. Without you, this would not exist!
 
 - Based on reverse-engineering of **LOADW.EXE** (Williams Electronics Games Inc., 1993–1995, Borland C++ 4.5)
 - DMA2 hardware documentation: **Keep Enterprises**, Jan 1992
