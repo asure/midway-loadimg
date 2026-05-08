@@ -21,6 +21,8 @@
 #include <ctype.h>
 #include <math.h>
 
+#define VERSION "0.9"
+
 #ifdef _WIN32
 #include <direct.h>
 #define PATH_SEP '\\'
@@ -2742,7 +2744,8 @@ static void write_irw(const char *path) {
  * ========================================================================= */
 
 static void print_usage(const char *arg) {
-    printf("loadimg <lod_file> [flags]\n");
+    printf("loadimg v%s — Williams/Midway arcade image loader\n", VERSION);
+    printf("Usage: loadimg <lod_file> [flags]\n");
     printf("\n");
     printf("Flags:\n");
     printf("  /R[=PATH]  Headerless raw IRW (no 0x44-byte header)\n");
@@ -2787,6 +2790,10 @@ int main(int argc, char *argv[]) {
 
     for (int i = 1; i < argc; i++) {
         char *a = argv[i];
+        if (strcmp(a, "--version") == 0 || strcmp(a, "-v") == 0) {
+            printf("loadimg v%s\n", VERSION);
+            return 0;
+        }
         if (a[0] == '/') {
             char flag = (char)toupper((unsigned char)a[1]);
             char *val = a + 2;
