@@ -469,6 +469,9 @@ typedef struct {
     int       n_palettes;
     int       n_pttbls;
     int       n_special;
+    int       ite_pttbl;  /* IT.EXE PTTBL position flag (saved from g.ite_pttbl) */
+    int       orig_seqcnt; /* original seqcnt before old-format zeroing */
+    int       orig_scrcnt; /* original scrcnt before old-format zeroing */
     LIB_HDR   hdr;
 } ImgFile;
 
@@ -580,8 +583,13 @@ static ImgFile* img_load(const char *path) {
             r->opals    = (uint16_t)0xffff;
         }
         img->norm_images = norm;
-        /* For old format, keep oset pointing to the original record table.
-         * Palette offset uses 42-byte records, not IMG_REC_SIZE (50). */
+        /* Keep original oset pointing to the old-format records.
+         * Palette offset will use 42-byte record size for old format. */
+        img->hdr.oset = old_oset;
+        /* Save original seq/scrcnt before zeroing (needed for SEQ output) */
+        img->orig_seqcnt = img->hdr.seqcnt;
+        img->orig_scrcnt = img->hdr.scrcnt;
+        /* Patch hdr so rest of img_load works */
         img->hdr.temp    = 0xabcd;
         img->hdr.version = 0x634;
         img->hdr.seqcnt  = 0;
@@ -2861,6 +2869,8 @@ static void process_lod(const char *lod_path) {
             else {
                 strncpy(cur.imgpath, fname, MAX_PATH-1);
                 if (g.verbose) printf("Loaded: %s (%d images)\n", fname, cur.imgfile->n_images);
+                /* /OLD mode: SEQ output (IMGASEQ.ASM) — structure differs from
+                 * documented format for old-format IMGs; needs more research */
             }
         }
     }
