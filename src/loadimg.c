@@ -1552,17 +1552,21 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             continue;
         }
 
-        /* Find in image list (skipping special records).
-         * Old-format IMG (0x634 from 42-byte conversion): first match wins.
-         * New-format IMG: last match wins (LOADW overwrites duplicates). */
+        /* Find in image list. Supports NAME+META syntax (e.g. SPSTP0+STP0L)
+         * where LOAD.EXE concatenates image data; the +META suffix is a modifier.
+         * Look up the part before + when the full name fails. */
         IMG_REC *rec = NULL;
         int img_is_oldfmt = (cur->imgfile->hdr.version == 0x634);
+        char lookup_name[MAX_NAME];
+        strncpy(lookup_name, name, MAX_NAME-1);
+        char *plus = strchr(lookup_name, '+');
+        if (plus) *plus = 0;  /* strip +META for IMG lookup */
         for (int i = 0; i < cur->imgfile->n_images; i++) {
             char n[MAX_NAME];
             strncpy(n, cur->imgfile->images[i].name, MAX_NAME-1);
             n[MAX_NAME-1] = 0;
             for (int j = 0; j < MAX_NAME; j++) if (!n[j]) break;
-             if (strcmp(n, name) == 0) {
+             if (strcmp(n, lookup_name) == 0) {
                  rec = &cur->imgfile->images[i];
                  if (img_is_oldfmt) break;
              }
