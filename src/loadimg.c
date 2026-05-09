@@ -267,6 +267,7 @@ typedef struct {
     int      ppp;
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
     int      old_mode;   /* 1 if /OLD flag: legacy LOAD.EXE output (no IHDR, SAG+PAL on same .long, RLC>) */
+    int      rlc;        /* 1 if RLC> active: 2bpp run-length encoding */
 
     char     imgdir[MAX_PATH];
     char     tbldir[MAX_PATH];
@@ -1084,6 +1085,62 @@ static void encode_row(uint8_t *row, int w, int sizx, int bpp,
 static uint8_t zero_row_buf[4096];
 
 /* =========================================================================
+ * RLC (Run-Length Code) encoder for LOAD.EXE 4-color images
+ *
+ * Encodes 8-bit pixel data into 2bpp RLE format:
+ *   [1][rrrrr][cc]  = run of N pixels of 2-bit color cc
+ *     r=0   → 68 pixels
+ *     r=1-31 → 4-34 pixels (= r+3)
+ *   [00][c2][c1][c0] = 3 literal 2-bit pixels (c0,c1,c2)
+ *
+ * The encoder reads stride-width 8-bit pixels, reduces to 2bpp
+ * (low 2 bits), and produces RLC-compressed bytes to the IRW.
+ * ========================================================================= */
+
+static void rlc_encode(uint8_t *pix, int w, int h, int stride) {
+    /* Convert row to 2bpp pixels, then RLE encode */
+    int total_pixels = w * h;
+    uint8_t *p2 = (uint8_t*)malloc(total_pixels);
+    for (int y = 0; y < h; y++) {
+        uint8_t *row = pix + y * stride;
+        for (int x = 0; x < w; x++)
+            p2[y * w + x] = row[x] & 3;
+    }
+    int pos = 0;
+    while (pos < total_pixels) {
+        uint8_t cur = p2[pos];
+        int run = 0;
+        while (pos + run < total_pixels && p2[pos + run] == cur)
+            run++;
+        if (run >= 4) {
+            while (run > 0) {
+                int this_run;
+                if (run >= 68) {
+                    this_run = 68;
+                } else if (run > 34) {
+                    this_run = 34;
+                } else {
+                    this_run = run;
+                }
+                int r = this_run >= 68 ? 0 : this_run - 3;
+                irw_write_byte(0x80 | ((r & 0x1f) << 2) | (cur & 3));
+                pos += this_run;
+                run -= this_run;
+            }
+        } else {
+            int remaining = total_pixels - pos;
+            int n_lit = remaining >= 3 ? 3 : remaining;
+            uint8_t lit_byte = 0;
+            for (int li = 0; li < n_lit; li++)
+                lit_byte |= (p2[pos + li] << (li * 2));
+            irw_write_byte(lit_byte);
+            pos += n_lit;
+        }
+    }
+    free(p2);
+}
+
+/* =========================================================================
  * Encode one image to IRW
  * ========================================================================= */
 
@@ -1127,6 +1184,13 @@ static uint32_t encode_image(ImgFile *img, IMG_REC *rec, CompParams *cp, int bpp
      *   (XON applied BEFORE stride alignment.)
      */
     int do_cmp = (cp->ctrl & 0x80) ? 1 : 0;
+
+    /* RLC mode: use 2bpp run-length encoding for legacy DMA1 images */
+    if (g.rlc) {
+        rlc_encode((g.zon && do_cmp) ? NULL : pix, rec->w, rec->h, img_stride);
+        free(scl_buf);
+        return sag;
+    }
 
     for (int y = 0; y < rows; y++) {
         uint8_t *row = (g.zon && do_cmp) ? scl_buf + y * scl_stride : pix + y * img_stride;
@@ -2744,7 +2808,7 @@ static void process_lod(const char *lod_path) {
         else if (!strncmp(upper, "MON>", 4)) { }
         else if (!strncmp(upper, "BON>", 4)) { }
         else if (!strncmp(upper, "ROM>", 4)) { }
-        else if (!strncmp(upper, "RLC>", 4)) { /* Old-format run-length encoding flag — fallback to raw encoding */ }
+        else if (!strncmp(upper, "RLC>", 4)) { g.rlc = !g.rlc; }
         else if (!strncmp(upper, "--->", 4)) {
             if (cur.imgfile) parse_imglist(line, &cur, 0);
         }
