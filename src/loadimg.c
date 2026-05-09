@@ -1519,6 +1519,12 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         strncpy(last_imgpath, cur->imgpath, MAX_PATH-1);
         last_imgpath[MAX_PATH-1] = 0;
     }
+    /* +META suffix cache: reset per ---- line so same-suffix sharing is
+     * scoped to a single line (e.g., GWENHL1+GHL1L,GWENHC1+GHL1L share SAG) */
+    char sag_suffix_cache[MAX_IMAGES][MAX_NAME];
+    uint32_t sag_suffix_sags[MAX_IMAGES];
+    int n_sag_suffix = 0;
+
     const char *p = line + 5;
     while (*p) {
         while (*p == ' ' || *p == ',') p++;
@@ -1567,9 +1573,6 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         const char *label_name = (plus) ? base_name : name;
 
         /* Check if same +META suffix was already encoded (reuse SAG) */
-        static char sag_suffix_cache[MAX_IMAGES][MAX_NAME];
-        static uint32_t sag_suffix_sags[MAX_IMAGES];
-        static int n_sag_suffix = 0;
         uint32_t reuse_sag = 0;
         if (suffix[0]) {
             for (int sci = 0; sci < n_sag_suffix; sci++) {
