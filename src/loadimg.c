@@ -1121,7 +1121,7 @@ static void rlc_encode(uint8_t *pix, int w, int h, int stride) {
         while (pos + run < total_pixels && p2[pos + run] == cur)
             run++;
         if (run >= 4) {
-            while (run > 0) {
+            while (run >= 4) {
                 int this_run;
                 if (run >= 68) {
                     this_run = 68;
@@ -1135,6 +1135,7 @@ static void rlc_encode(uint8_t *pix, int w, int h, int stride) {
                 pos += this_run;
                 run -= this_run;
             }
+            /* Any remainder < 4 falls through to the literal branch next iteration */
         } else {
             int remaining = total_pixels - pos;
             int n_lit = remaining >= 3 ? 3 : remaining;
