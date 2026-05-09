@@ -1856,9 +1856,9 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
           if (g.build_tables && g.asm_fp)
               write_image_tbl(g.asm_fp, ie);
 
-         /* Only write .globl for ENDMARKER and special symbols, not every image */
-         if (g.glo_fp && strcmp(name, "ENDMARKER") == 0)
-            write_global(name);
+          /* Only write .globl for ENDMARKER and special symbols, not every image */
+          if (g.glo_fp && strcmp(name, "ENDMARKER") == 0)
+             write_global(name);
     }
 }
 
@@ -2029,8 +2029,8 @@ static void process_lod(const char *lod_path) {
         }
         else if (!strncmp(upper, "***>", 4)) parse_addr(line);
         else if (!strncmp(upper, "IHDR", 4)) parse_ihdr(line);
-        else if (!strncmp(upper, "ZON>", 4)) g.zon = 1;
-        else if (!strncmp(upper, "ZOF>", 4)) g.zon = 0;
+        else if (!strncmp(upper, "ZON>", 4)) { if (!g.old_mode) g.zon = 1; }
+        else if (!strncmp(upper, "ZOF>", 4)) { if (!g.old_mode) g.zon = 0; }
         else if (!strncmp(upper, "PON>", 4)) g.pon = 1;
         else if (!strncmp(upper, "POF>", 4)) g.pon = 0;
         else if (!strncmp(upper, "XON>", 4)) g.xon = 1;
