@@ -1552,10 +1552,33 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             continue;
         }
 
-        /* NAME+META (e.g. SPSTP0+STP0L) is a display modifier, not a separate
-         * image. The +META suffix provides alternate display metadata; the pixel
-         * data comes from the base image. LOAD.EXE skips these entries. */
-        if (strchr(name, '+')) continue;
+        /* NAME+META (e.g. SPSTP0+STP0L): strip +META for IMG lookup and label.
+         * LOAD.EXE uses the base name only, treating the suffix as metadata.
+         * +META entries sharing the same suffix reuse the first's SAG (size 0). */
+        char base_name[MAX_NAME];
+        strncpy(base_name, name, MAX_NAME-1);
+        char *plus = strchr(base_name, '+');
+        char suffix[MAX_NAME];
+        suffix[0] = 0;
+        if (plus) {
+            strncpy(suffix, plus, MAX_NAME-1);
+            *plus = 0;
+        }
+        const char *label_name = (plus) ? base_name : name;
+
+        /* Check if same +META suffix was already encoded (reuse SAG) */
+        static char sag_suffix_cache[MAX_IMAGES][MAX_NAME];
+        static uint32_t sag_suffix_sags[MAX_IMAGES];
+        static int n_sag_suffix = 0;
+        uint32_t reuse_sag = 0;
+        if (suffix[0]) {
+            for (int sci = 0; sci < n_sag_suffix; sci++) {
+                if (strcmp(sag_suffix_cache[sci], suffix) == 0) {
+                    reuse_sag = sag_suffix_sags[sci];
+                    break;
+                }
+            }
+        }
 
         IMG_REC *rec = NULL;
         int img_is_oldfmt = (cur->imgfile->hdr.version == 0x634);
@@ -1564,7 +1587,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             strncpy(n, cur->imgfile->images[i].name, MAX_NAME-1);
             n[MAX_NAME-1] = 0;
             for (int j = 0; j < MAX_NAME; j++) if (!n[j]) break;
-              if (strcmp(n, name) == 0) {
+             if (strcmp(n, base_name) == 0) {
                  rec = &cur->imgfile->images[i];
                  if (img_is_oldfmt) break;
              }
@@ -1882,13 +1905,21 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             }
         }
 
-         if (dedup_idx >= 0) {
-             ie->sag = dedup_table[dedup_idx].sag;
-             if (g.verbose)
-                 printf("  Checksum match on image [%s].\n", name);
-         } else {
-             ie->sag = encode_image(cur->imgfile, rec, &cp, bpp & 0xff);
-             if (g.dedup && n_dedup < MAX_DEDUP) {
+          if (reuse_sag > 0) {
+              ie->sag = reuse_sag;
+          } else if (dedup_idx >= 0) {
+              ie->sag = dedup_table[dedup_idx].sag;
+              if (g.verbose)
+                  printf("  Checksum match on image [%s].\n", name);
+          } else {
+              ie->sag = encode_image(cur->imgfile, rec, &cp, bpp & 0xff);
+              /* Cache SAG by +META suffix for same-suffix reuse */
+              if (suffix[0] && n_sag_suffix < MAX_IMAGES) {
+                  strncpy(sag_suffix_cache[n_sag_suffix], suffix, MAX_NAME-1);
+                  sag_suffix_sags[n_sag_suffix] = ie->sag;
+                  n_sag_suffix++;
+              }
+              if (g.dedup && n_dedup < MAX_DEDUP) {
                 uint8_t *pix_data = img_pixels(cur->imgfile, rec);
                 int pstride = IMG_STRIDE(rec->w);
                 int pix_bytes = pstride * rec->h;
