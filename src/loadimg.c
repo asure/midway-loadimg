@@ -1197,7 +1197,7 @@ static uint32_t encode_image(ImgFile *img, IMG_REC *rec, CompParams *cp, int bpp
         if (g.zon && do_cmp) {
             encode_row(row, scl_stride, scl_stride, bpp, cp->lm_mult, cp->tm_mult, &running_lead);
         } else {
-            int zw = g.pad4bits ? OUT_STRIDE(rec->w) : rec->w;
+            int zw = g.old_mode ? IMG_STRIDE(rec->w) : (g.pad4bits ? OUT_STRIDE(rec->w) : rec->w);
             if (g.xon && (!g.zon || !do_cmp)) zw = OUT_STRIDE(rec->w + 1);
             if (zw < 1) zw = 1;
             for (int x = 0; x < zw; x++)
@@ -1552,21 +1552,19 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             continue;
         }
 
-        /* Find in image list. Supports NAME+META syntax (e.g. SPSTP0+STP0L)
-         * where LOAD.EXE concatenates image data; the +META suffix is a modifier.
-         * Look up the part before + when the full name fails. */
+        /* NAME+META (e.g. SPSTP0+STP0L) is a display modifier, not a separate
+         * image. The +META suffix provides alternate display metadata; the pixel
+         * data comes from the base image. LOAD.EXE skips these entries. */
+        if (strchr(name, '+')) continue;
+
         IMG_REC *rec = NULL;
         int img_is_oldfmt = (cur->imgfile->hdr.version == 0x634);
-        char lookup_name[MAX_NAME];
-        strncpy(lookup_name, name, MAX_NAME-1);
-        char *plus = strchr(lookup_name, '+');
-        if (plus) *plus = 0;  /* strip +META for IMG lookup */
         for (int i = 0; i < cur->imgfile->n_images; i++) {
             char n[MAX_NAME];
             strncpy(n, cur->imgfile->images[i].name, MAX_NAME-1);
             n[MAX_NAME-1] = 0;
             for (int j = 0; j < MAX_NAME; j++) if (!n[j]) break;
-             if (strcmp(n, lookup_name) == 0) {
+              if (strcmp(n, name) == 0) {
                  rec = &cur->imgfile->images[i];
                  if (img_is_oldfmt) break;
              }
@@ -1609,9 +1607,11 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                             name, g.ppp, pal_rec->numc);
             }
              /* Auto pixel packing: LOADW only reduces bpp below PPP when PPP=0 (auto mode).
-              * When PPP>0 forces a specific bpp, it is never reduced — only the
-              * bpp overflow check above applies. */
+               * When PPP>0 forces a specific bpp, it is never reduced — only the
+               * bpp overflow check above applies. */
             if (bpp_overflow) bpp |= 0x100;  /* flag for ctrl_zero */
+        } else if (g.old_mode) {
+            bpp = 8;  /* /OLD mode defaults to 8bpp (LOAD.EXE behavior) */
         } else {
                /* Auto pixel packing: select bpp per image */
               uint8_t *pix = img_pixels(cur->imgfile, rec);
