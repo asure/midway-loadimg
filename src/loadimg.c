@@ -1518,7 +1518,7 @@ static PAL_REC* find_user_palette(ImgFile *img, int stored_palnum) {
 static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_override) {
     /* Track image names already processed within the current IMG file.
      * LOADW skips duplicate name references in ---> lines. */
-    static char seen_names[4096][MAX_NAME];
+    static char seen_names[4096][64];
     static int n_seen = 0;
     /* Use imgpath (file path string) for identity, not the ImgFile pointer
      * which may be recycled by calloc after free. */
@@ -1539,7 +1539,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         while (*p == ' ' || *p == ',') p++;
         if (!*p || *p == '\r' || *p == '\n') break;
 
-        char name[MAX_NAME];
+        char name[64];
         int ni = 0;
         int scale_n = 1;
 
@@ -1570,13 +1570,13 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         /* NAME+META (e.g. SPSTP0+STP0L): strip +META for IMG lookup and label.
          * LOAD.EXE uses the base name only, treating the suffix as metadata.
          * +META entries sharing the same suffix reuse the first's SAG (size 0). */
-        char base_name[MAX_NAME];
-        strncpy(base_name, name, MAX_NAME-1);
+        char base_name[64];
+        strncpy(base_name, name, 63);
         char *plus = strchr(base_name, '+');
-        char suffix[MAX_NAME];
+        char suffix[64];
         suffix[0] = 0;
         if (plus) {
-            strncpy(suffix, plus, MAX_NAME-1);
+            strncpy(suffix, plus, 63);
             *plus = 0;
         }
         const char *label_name = (plus) ? base_name : name;
@@ -1591,7 +1591,6 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 }
             }
         }
-
         IMG_REC *rec = NULL;
         int img_is_oldfmt = (cur->imgfile->hdr.version == 0x634);
         for (int i = 0; i < cur->imgfile->n_images; i++) {
