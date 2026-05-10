@@ -15,11 +15,11 @@ echo ""
 ALL_PASS=0; ALL_FAIL=0
 
 test_lod() {
-    local WORKDIR="$1" REFDIR="$2" LODNAME="$3" TBL_LIST="$4"
+    local WORKDIR="$1" REFDIR="$2" LODNAME="$3" TBL_LIST="$4" EXTRA="$5"
     cd "$BASE/$WORKDIR" 2>/dev/null || { echo "  SKIP $LODNAME: no $WORKDIR"; return; }
 
-    rm -f "$LODNAME.IRW" *.TBL IMGTBL.ASM IMGTBL.GLO IMGPAL.ASM 2>/dev/null
-    if ! timeout 180 "$TOOL" "$LODNAME.LOD" /P /T 2>/dev/null; then
+    rm -f "$LODNAME.IRW" *.TBL IMGTBL.ASM IMGTBL.GLO IMGPAL.ASM BGND*.ASM BGND*.GLO 2>/dev/null
+    if ! timeout 180 "$TOOL" "$LODNAME.LOD" /P /T $EXTRA 2>/dev/null; then
         echo "  FAIL $LODNAME: tool error"; ALL_FAIL=$((ALL_FAIL + 1)); return
     fi
 
@@ -66,6 +66,12 @@ test_lod workArt refArt BBVDA "BBVDA"
 
 # workwwf: WWF WrestleMania arcade data
 test_lod workwwf refwwf BAM "BAMIMG"
+
+# worktrog: Trog /OLD mode (LOADE.EXE)
+test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX TROGIMG" "/OLD"
+
+# worknarc: Narc /OLD mode (LOADE.EXE, RLC encoding)
+test_lod worknarc refnarc NARC1 "NARC1IMG NARCBON NARCBUG NARCCAD NARCCHOP NARCDOG NARCDUMP NARCENT NARCGANG NARCHEAD NARCHOOK NARCHYPO NARCLAB NARCLOAF NARCLOWN NARCMBIG NARCMUGS NARCPIMP NARCPLAY NARCPORS NARCRAMB NARCTEXT" "/OLD"
 
 # BBPAL is palette-only (ASM> junkxxxx, no TBL output)
 # workht: misc.lod from NBA Jam/Hangtime (headerless, dual-bank)
