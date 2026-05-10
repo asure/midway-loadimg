@@ -463,6 +463,28 @@ field offset than our 40-byte `sizeof(PTTBL)`.
 
 See `sentinel.md` for the full investigation log and untried hypotheses.
 
+## Current Test Results
+
+| Test | Passing | Failing |
+|------|---------|---------|
+| **MK2-8MIL** | 7/7 all pass | — |
+| **BB** | PASS | — |
+| **BB2** | PASS | — |
+| **BB3** | PASS | — |
+| **BB4** | PASS | — |
+| **BB5** | 6/7 | PLYRDSEQ (PT0X sentinel) |
+| **BB6** | 5/6 | PLYRDSQ2 (PT fields) |
+| **BB7** | 15/16 | OUTDOOR (false dedup) |
+| **BB8** | PASS | — |
+| **BBMUG** | PASS | — |
+| **BBVDA** | PASS | — |
+| **TROG** | 10/15 (9 TBLs + IMGPAL) | IMGTBL.ASM (BBB images), IMGTBL.GLO (order), BGND format |
+| **NARC1** | 18/21 | RLC encoder format |
+| **CARN** | 0/13 | TUNG3 dedup collision cascades all SAGs |
+| **MISC** | 21/21 PASS | — |
+
+**Overall: 15 pass, 6 fail** (v0.95)
+
 ## Remaining Investigation Questions
 
 1. **Where does BB5 first diverge?** Find the first CMP=1 image in BB5

@@ -624,28 +624,31 @@ consecutive `:W` fields share a `.word` line matching LOADW's output.
 All LOD files are from **Mortal Kombat 2** arcade data. Naming: MK2MIL = MK2 ROM bank 2, MK4MIL = bank 4, etc.
 BB* LODs are from **NBA Jam / Hangtime** arcade data.
 
-| Test | Mode | TBLs | Result | Notes |
-|------|------|------|--------|-------|
-| **MK2MIL** | ZON + ZOF | 5/5 | **PASS** | IRW + TBLs byte-exact |
-| **MK3MIL** | ZOF | 5/5 | **PASS** | IRW + TBLs byte-exact |
-| **MK4MIL** | ZON | 6/6 | **PASS** | IRW + TBLs byte-exact |
-| **MK5MIL** | ZON | 7/7 | **PASS** | IRW + TBLs byte-exact |
-| **MK6MIL** | ZON/ZOF | 17/17 | **PASS** | All TBLs byte-exact |
-| **MK7MIL** | Mixed | 11/11 | **PASS** | Background dedup fixed |
-| **MK8MIL** | FRM | 1/1 | **PASS** | MKREVX.TBL match |
-| **BB** | ZOF+XON | 2/2 | **PASS** | CMP=0 XON width fix |
-| **BB2** | ZOF+XON | 3/3 | **PASS** | |
-| **BB3** | ZOF+PT | 2/2 | **PASS** | PTTBL 16-byte header bounds |
-| **BB4** | ZOF+XON | 1/1 | **PASS** | |
-| **BB5** | Mixed | 6/7 | FAIL | PLYRDSEQ PT0X sentinel (cosmetic) |
-| **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 2 cosmetic PT0X sentinel differences (0 vs -32768) |
-| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
-| **BB8** | XON | 3/3 | **PASS** | |
-| **BBMUG** | ZOF+XON | 2/2 | **PASS** | Dual-hash dedup (byte-sum disambiguation) |
-| **BBVDA** | VDA | 1/1 | **PASS** | |
-| **MISC** | Mixed | 21/21 | **PASS** | NBA Jam/Hangtime |
+| Test | Mode | Result | Notes |
+|------|------|--------|-------|
+| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | IRW + TBLs byte-exact, IMGTBL.ASM match |
+| **MK3MIL** | ZOF | **PASS** (5/5) | |
+| **MK4MIL** | ZON | **PASS** (6/6) | |
+| **MK5MIL** | ZON | **PASS** (7/7) | |
+| **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
+| **MK7MIL** | Mixed | **PASS** (11/11) | IMGTBL.ASM + BGNDTBL.GLO match |
+| **MK8MIL** | FRM | **PASS** (1/1) | |
+| **BB** | ZOF+XON | **PASS** (2/2) | |
+| **BB2** | ZOF+XON | **PASS** (3/3) | |
+| **BB3** | ZOF+PT | **PASS** (2/2) | |
+| **BB4** | ZOF+XON | **PASS** (1/1) | |
+| **BB5** | Mixed | FAIL (6/7) | PLYRDSEQ PT0X sentinel, see `sentinel.md` |
+| **BB6** | Mixed | FAIL (5/6) | PLYRDSQ2 PT0X sentinel, see `sentinel.md` |
+| **BB7** | Mixed | FAIL (15/16) | OUTDOOR false dedup (pre-existing ref bug) |
+| **BB8** | XON | **PASS** (3/3) | |
+| **BBMUG** | ZOF+XON | **PASS** (2/2) | |
+| **BBVDA** | VDA | **PASS** (1/1) | |
+| **TROG** | /OLD | FAIL (10/15) | 9 TBLs + IMGPAL.ASM pass; BBB handler format diffs |
+| **NARC1** | /OLD | FAIL (18/21) | RLC encoder format diffs |
+| **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
+| **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
 
-**15 pass, 4 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
+**15 pass, 6 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -690,10 +693,9 @@ Additional fixes:
   (was hardcoded to -1).
 
 The BB5 CMP=1 encoder cascade was resolved in v0.95 with a PTTBL shared-entry
-pointer arithmetic fix. The BB5 cascade was caused by `&pttbls[pttblnum-2]` being
-undefined behavior for `pttblnum < 2` (negative array index). Replaced with
-explicit `ptrdiff_t` offset-from-file-base arithmetic. BB5: 3/7→6/7. The sole
-remaining BB5 failure is PLYRDSEQ (cosmetic PT0X sentinel: -16384 vs -32768).
+pointer arithmetic fix (`&pttbls[pttblnum-2]` UB → explicit `ptrdiff_t` offset).
+BB5: 3/7→6/7. The sole remaining BB5 failure is PLYRDSEQ (cosmetic PT0X
+sentinel: -16384 vs -32768, see `sentinel.md`).
 
 The specific BGSPEAR6 LM/TM mismatch was fixed (the `if`/`else if` trail loop
 and 120-cap logic now match FUN_1000_6f20 exactly), and the broader cascade

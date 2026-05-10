@@ -40,26 +40,29 @@ EOF
 
 ## Current Status (v0.95)
 
-| File | SAG Match | Notes |
-|------|-----------|-------|
-| `IMGTBL.ASM` | 232/341 | BBB cascade at [232] (TROGLOG/TROGISLE/etc. encoding) + 2 missing BBB labels |
-| `TROGDDAT.TBL` | TBD | Dependent on same BBB cascade |
-| `TROGSPRG.TBL` | TBD | |
-| `TROGWHL.TBL` | TBD | |
-| `TROGTEXT.TBL` | TBD | |
-| `TROGCAVE.TBL` | TBD | BBB background encoding |
-| `TROGENEM.TBL` | TBD | |
-| `TROGTDAT.TBL` | TBD | |
-| `TROGSCOR.TBL` | TBD | |
-| `TROGTREX.TBL` | TBD | BBB background encoding |
-| `BGNDTBL.GLO` | PASS | Background globals |
-| `IMGTBL.GLO` | ✗ | Missing per-image `.globl` entries |
-| `BGNDPAL.ASM` | ✗ | Format differences |
+| File | Status | Notes |
+|------|--------|-------|
+| `TROGDDAT.TBL` | **PASS** | |
+| `TROGENEM.TBL` | **PASS** | |
+| `TROGSPRG.TBL` | **PASS** | |
+| `TROGWHL.TBL` | **PASS** | |
+| `TROGTEXT.TBL` | **PASS** | |
+| `TROGCAVE.TBL` | **PASS** | |
+| `TROGTDAT.TBL` | **PASS** | |
+| `TROGSCOR.TBL` | **PASS** | |
+| `TROGTREX.TBL` | **PASS** | |
+| `IMGPAL.ASM` | **PASS** | |
+| `BGNDTBL.GLO` | **PASS** | |
+| `IMGTBL.ASM` | ✗ | Missing TROGMOUTH/MOUTHBACK (BBB images to main TBL) + .include BGNDTBL.GLO |
+| `IMGTBL.GLO` | ✗ | .globl ordering (palette entries before image entries) |
+| `BGNDTBL.ASM` | ✗ | BBB handler format (DMA ctrl, spacing, hex case) |
+| `BGNDPAL.ASM` | ✗ | BBB handler format (spacing, hex case) |
 | `IMGASEQ.ASM` | MISSING | Not yet generated |
 | `IMGSRC.ASM` | MISSING | Not yet generated |
 
-Format differences (Intel hex `0...H` vs Motorola `>...`, combined SAG+PAL
-`.long` lines vs separate) are cosmetic and intentionally kept as-is.
+All 9 per-game TBLs + IMGPAL.ASM are byte-exact. The remaining failures are
+BBB handler output format issues (BGNDTBL.ASM, BGNDPAL.ASM, IMGTBL.GLO) and
+the BBB background images in IMGTBL.ASM (TROGMOUTH, MOUTHBACK).
 
 ---
 
@@ -130,40 +133,20 @@ properly encoded data. Our tool skips it. This:
 2. Shifts all subsequent SAGs by 320 bytes
 3. All later images in IMGTBL.ASM have wrong SAGs
 
-### How the cascade propagates (current state)
+### Resolution in v0.95
 
-The +META global suffix cache now correctly reuses SAGs across the
-entire LOD, so BLOOVHAND2 shares its SAG with BLOOVHAND1 (matching
-LOAD.EXE behavior). The remaining cascade at IMGTBL.ASM SAG[232] is
-caused by BBB background images having different compressed sizes:
+The BBB compression cascade was fixed by:
+1. **Forcing 8bpp for BBB backgrounds in /OLD mode** (was auto-detecting to lower bpp)
+2. **No zero-compression in /OLD mode** — `g.zon=0` (LOAD.EXE only outputs uncompressed)
+3. **Consistent sizx_a in second pass** — comp_bits calculation now uses sizx_a (not w)
+4. **OUT_STRIDE minimum 1** for /OLD mode (was minimum 3, breaking 1-pixel font images)
 
-```
-IMGTBL.ASM: first 231 SAGs match (section_base_bit + global cache fix)
-  ↓
-BBB backgrounds (TROGLOG, TROGISLE, etc.): different compressed sizes
-  ↓
-SAG[232] BARL2 onward: cascade from BBB compression differences
-```
-
-See `cascade.md` for the CMP=1 encoder issue that causes the BBB encoding
-differences.
-
-### Files affected by the cascade
-
-The cascade at [232] propagates to all per-game TBL files. The root cause
-is the same CMP=1 compression mismatch as BB5/BB6/BB7 — backgrounds use
-the same FUN_1000_6f20 encoder but can select different LM/TM/bpp than
-LOADW, producing IRW data of different sizes.
-
-### Possible Fix: CMP=1 Encoder Matching
-
-The cascade is from the BBB background encoder, not from +META images.
-Fix the CMP=1 encoder to match LOADW's LM/TM/bpp selection exactly,
-and both the sprite and background cascades should resolve.
+All 9 per-game TBLs are now byte-exact. The remaining format differences
+are in BGNDTBL.ASM, BGNDPAL.ASM, IMGTBL.GLO (BBB handler output), and
+the TROGMOUTH/MOUTHBACK entries missing from IMGTBL.ASM.
 
 Note: BLOOVHAND2 and other +META derived images that don't exist in any
-IMG file are now handled by the global suffix cache — they share the
-SAG of the first image with the same suffix (matching LOAD.EXE behavior).
+IMG file are handled by the global suffix cache (matching LOAD.EXE 4.50).
 
 ---
 

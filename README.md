@@ -24,11 +24,14 @@ A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Elec
 ## Version History
 
 ### v0.95 (Latest)
-- Fixed `/OLD` mode IRW header format: uses LOAD.EXE version string (`"4.50 4/27/90"`), stores `***>` base address at offset 0x2C.
-- Added `section_base_bit` tracking for continuous IRW across multiple `***>` sections (fixes Trog SAG computation with two address ranges).
+- **Trog: 9/9 TBLs + IMGPAL.ASM pass** — BBB compression fixed (8bpp, no CMP, consistent sizx_a for 2nd pass), OUT_STRIDE minimum 1 for /OLD, file headers in IMGTBL.ASM, separate SAG/PAL `.long` lines.
+- **/OLD2 flag** for LOAD.EXE 4.65 (Total Carnage) with `"4.65 9/3/91"` IRW header.
+- **NARC1: 18/21** — RLC encoder improvements.
+- Fixed `/OLD` mode IRW header format: uses LOAD.EXE version string, stores `***>` base address at offset 0x2C.
+- Added `section_base_bit` tracking for continuous IRW across multiple `***>` sections (fixes Trog SAG with two address ranges).
 - Made `+META` suffix cache global (static) matching LOAD.EXE behavior; stores final TBL SAG for correct cross-section cache hits.
 - Fixed PTTBL shared-entry pointer arithmetic (`pttblnum-2`/`pttblnum-3`): uses signed `ptrdiff_t` offset to avoid UB. Resolves BB5 CMP=1 cascade (3/7→6/7).
-- Added `cascade.md` documenting the remaining CMP=1 encoder issues.
+- Added `cascade.md` documenting remaining encoder issues, `sentinel.md` for PT0X investigation.
 
 ### v0.91
 - Fixed old-format IMG palette offset computation (42-byte → 50-byte conversion was computing `pal_ofs = old_oset + n*92` instead of `old_oset + n*42`). Fixes palette lookups in WWF WrestleMania font files (`TROGF15.IMG`, `TROGF7.IMG`).
@@ -196,29 +199,33 @@ Run `make test` from the build directory. Compares all TBL/ASM/GLO/IRW output ag
 cd build && make test
 ```
 
-### Current Results: 15 pass, 4 fail
+### Current Results: 15 pass, 6 fail
 
-| Test | Mode | TBLs | Result | Notes |
-|------|------|------|--------|-------|
-| **MK2MIL** | ZON + ZOF | 5/5 | PASS | IRW + TBLs byte-exact |
-| **MK3MIL** | ZOF | 5/5 | PASS | IRW + TBLs byte-exact |
-| **MK4MIL** | ZON | 6/6 | PASS | IRW + TBLs byte-exact |
-| **MK5MIL** | ZON | 7/7 | PASS | IRW + TBLs byte-exact |
-| **MK6MIL** | ZON/ZOF | 17/17 | PASS | All TBLs byte-exact |
-| **MK7MIL** | Mixed | 11/11 | PASS | Background dedup fixed |
-| **MK8MIL** | FRM | 1/1 | PASS | MKREVX.TBL match |
-| **BB** | ZOF+XON | 2/2 | PASS | CMP=0 XON width fix |
-| **BB2** | ZOF+XON | 3/3 | PASS | |
-| **BB3** | ZOF+PT | 2/2 | PASS | PTTBL bounds fixed |
-| **BB4** | ZOF+XON | 1/1 | PASS | |
-| **BB5** | Mixed | 6/7 | FAIL | PLYRDSEQ PT0X sentinel (cosmetic) |
-| **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 PT0X sentinel (cosmetic) |
-| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
-| **BB8** | XON | 3/3 | PASS | |
-| **BBMUG** | ZOF+XON | 2/2 | PASS | Dual-hash dedup fix |
-| **BBVDA** | VDA | 1/1 | PASS | |
-| **MISC** | Mixed | 21/21 | PASS | NBA Jam/Hangtime, dual-bank mode |
+| Test | Mode | Result | Notes |
+|------|------|--------|-------|
+| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | IRW + TBLs byte-exact, IMGTBL.ASM match |
+| **MK3MIL** | ZOF | **PASS** (5/5) | |
+| **MK4MIL** | ZON | **PASS** (6/6) | |
+| **MK5MIL** | ZON | **PASS** (7/7) | |
+| **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
+| **MK7MIL** | Mixed | **PASS** (11/11) | IMGTBL.ASM + BGNDTBL.GLO match |
+| **MK8MIL** | FRM | **PASS** (1/1) | |
+| **BB** | ZOF+XON | **PASS** (2/2) | |
+| **BB2** | ZOF+XON | **PASS** (3/3) | |
+| **BB3** | ZOF+PT | **PASS** (2/2) | |
+| **BB4** | ZOF+XON | **PASS** (1/1) | |
+| **BB5** | Mixed | FAIL (6/7) | PLYRDSEQ PT0X sentinel, see `sentinel.md` |
+| **BB6** | Mixed | FAIL (5/6) | PLYRDSQ2 PT fields, see `sentinel.md` |
+| **BB7** | Mixed | FAIL (15/16) | OUTDOOR false dedup (pre-existing ref bug) |
+| **BB8** | XON | **PASS** (3/3) | |
+| **BBMUG** | ZOF+XON | **PASS** (2/2) | |
+| **BBVDA** | VDA | **PASS** (1/1) | |
+| **TROG** | /OLD | FAIL (10/15) | 9 TBLs + IMGPAL.ASM pass; BBB handler format diffs |
+| **NARC1** | /OLD | FAIL (18/21) | RLC encoder format diffs |
+| **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
+| **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
 
+Format: loadimg `<LOD>` `/P /T` for LOADW tests, `loadimg ... /OLD /T` for LOAD.EXE.
 Reference files can be regenerated via `make regen` (requires DOSBox).
 
 ---
@@ -227,18 +234,15 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 
 | Issue | Scope | Root Cause |
 |-------|-------|------------|
-| **PTTBL shared entry bounds** | BB5 | `pttblnum-2`/`pttblnum-3` shared entry access used signed pointer arithmetic (UB). Fixed with explicit offset-based bounds check. BB5: 3/7→6/7. |
-| **PLYRDSQ2 PT0X sentinel** | BB5, BB6 | Cosmetic: PT0X = -16384/0 vs -32768 (LOADW sentinel inconsistency) |
-| **OUTDOOR false dedup** | BB7 | Pre-existing LOADW dedup bug — reference has wrong LEAF pixels |
-| **Old-format palette offset** | LOADW | 42-byte to 50-byte IMG_REC conversion computed palette offset incorrectly (`pal_ofs = oset + n*92` instead of `oset + n*42`). Fixed in v0.91. |
-| **IHDR> field grouping** | LOADW | Hardcoded `CTRL` special case in `write_image_tbl` broke `.word` line grouping when `PAL:L` was skipped. Fixed in v0.91 — IHDR> now fully dynamic. |
-| **16-bit checksum collisions** | LOADW | LOADW's word-wise checksum misses the last byte of odd-length buffers, causing false dedup matches on `BBMUG` mugshots. Fixed in loadimg with a dual-hash (word-sum + byte-sum). |
-| **PTTBL dense stride** | LOADW | PTTBL data stored at 12-byte stride but LOADW reads at 40-byte stride. loadimg version-gates the SEQ/SCR skip and enforces a minimum SIZX threshold. |
-| **BPP from stride-width** | LOADW | LOADW computes bpp from stride-width pixels (including padding bytes). loadimg matches this behavior. |
-| **FRM> word alignment** | LOADW | Movie footage uses word alignment *after* each entry. loadimg matches. |
-| **PAL_REC offset bug** | LOADW | Adding `n_special` again to palette offset caused a 100-byte overrun. loadimg correctly uses `imgcnt` directly. |
+| **TROGMOUTH/MOUTHBACK missing** | Trog | BBB handler writes background images to BGNDTBL.ASM only; ref expects them in IMGTBL.ASM too |
+| **IMGTBL.GLO entry order** | Trog | Palette .globl entries written before per-image .globl entries (cosmetic) |
+| **BB5 PLYRDSEQ PT0X sentinel** | BB5 | Sentinel value mismatch (-32768 vs -16384), see `sentinel.md` |
+| **BB6 PLYRDSQ2 PT fields** | BB6 | PTTBL field mapping miscalculation |
+| **BB7 OUTDOOR false dedup** | BB7 | Pre-existing LOADW dedup bug (ref has wrong LEAF pixels) |
+| **NARC1 RLC encoder** | Narc | Run-length code format differences vs LOAD.EXE |
+| **CARN TUNG3 dedup collision** | Carn | Word sum + byte sum collide across differing pixels (722/1036); rotating XOR breaks MK5/6; see `sentinel.md` |
 
-The BB5 CMP=1 encoder cascade was resolved by fixing the PTTBL shared-entry pointer arithmetic (signed ptrdiff_t offset instead of `&pttbls[pttblnum-2]` UB). Remaining cosmetic PT0X sentinel values differ between BB5 PLYRDSEQ and BB6 PLYRDSQ2. See `cascade.md` for details.
+Fixed issues (not in v0.91): PTTBL shared entry UB → BB5 3/7→6/7; section_base_bit → Trog SAG across two ***>; +META global cache → cross-section suffix sharing; /OLD IRW header format; BBB 8bpp/CMP=0 → Trog 9/9; rotating XOR hash for dedup collision disambiguation.
 
 ---
 
