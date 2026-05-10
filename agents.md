@@ -637,7 +637,7 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BB2** | ZOF+XON | 3/3 | **PASS** | |
 | **BB3** | ZOF+PT | 2/2 | **PASS** | PTTBL 16-byte header bounds |
 | **BB4** | ZOF+XON | 1/1 | **PASS** | |
-| **BB5** | Mixed | 3/7 | FAIL | CMP=1 encoder cascade |
+| **BB5** | Mixed | 6/7 | FAIL | PLYRDSEQ PT0X sentinel (cosmetic) |
 | **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 2 cosmetic PT0X sentinel differences (0 vs -32768) |
 | **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
 | **BB8** | XON | 3/3 | **PASS** | |
@@ -645,7 +645,7 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BBVDA** | VDA | 1/1 | **PASS** | |
 | **MISC** | Mixed | 21/21 | **PASS** | NBA Jam/Hangtime |
 
-**15 pass, 4 fail** (v0.91). WWF tests (MAIN, MISC) not yet in automated suite.
+**15 pass, 4 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -689,17 +689,21 @@ Additional fixes:
 - **PWRD1/PWRD2/PWRD3 from IMG_REC**: Set from `rec->anix2`/`aniy2`/`aniz2`
   (was hardcoded to -1).
 
-The BB5 CMP=1 encoder cascade differs from LOADW for compressed images
-in the NBA Jam/Hangtime datasets. The specific BGSPEAR6 LM/TM mismatch was fixed
-(the `if`/`else if` trail loop and 120-cap logic now match FUN_1000_6f20 exactly),
-and the broader cascade for BB6/BB7 was resolved with the PTTBL version gate
-and stride-width bpp scan fixes. BB6 CHEER now passes (stride-width bpp scan),
-and PLYRDSQ2 has only 2 cosmetic PT0X sentinel differences remaining.
-BB7 went from 8/16→15/16 with PTTBL version gate + min-10 SIZX + IT.EXE
-validation; the sole remaining failure is OUTDOOR (pre-existing LOADW false
-dedup bug — reference has wrong LEAF pixels). MK2MIL, MK4MIL, and
-MK8MIL are fully byte-exact, confirming the encoder is correct for those
-datasets.
+The BB5 CMP=1 encoder cascade was resolved in v0.95 with a PTTBL shared-entry
+pointer arithmetic fix. The BB5 cascade was caused by `&pttbls[pttblnum-2]` being
+undefined behavior for `pttblnum < 2` (negative array index). Replaced with
+explicit `ptrdiff_t` offset-from-file-base arithmetic. BB5: 3/7→6/7. The sole
+remaining BB5 failure is PLYRDSEQ (cosmetic PT0X sentinel: -16384 vs -32768).
+
+The specific BGSPEAR6 LM/TM mismatch was fixed (the `if`/`else if` trail loop
+and 120-cap logic now match FUN_1000_6f20 exactly), and the broader cascade
+for BB6/BB7 was resolved with the PTTBL version gate and stride-width bpp scan
+fixes. BB6 CHEER now passes (stride-width bpp scan), and PLYRDSQ2 has only 2
+cosmetic PT0X sentinel differences remaining. BB7 went from 8/16→15/16 with
+PTTBL version gate + min-10 SIZX + IT.EXE validation; the sole remaining
+failure is OUTDOOR (pre-existing LOADW false dedup bug — reference has wrong
+LEAF pixels). MK2MIL, MK4MIL, and MK8MIL are fully byte-exact, confirming the
+encoder is correct for those datasets.
 
 ### Reference File Sources
 
@@ -781,7 +785,11 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 36. **PTTBL positioning via IT.EXE validation** — PTTBL offset computation validated against IT.EXE's `wmpstruc.inc` struct layout. SEQ/SCR skip is version-gated (< 0x654). PTTBL indexing confirmed: `pttbls[pttblnum]` directly indexes entry `(pttblnum - n_special)` with pointer shifted by `-n_special * sizeof(PTTBL)`. Fixes BB6 PLYRDSQ2 PT field computations.
 37. **PT field mapping from PTTBL** — PT0X reads cbox from shared entry 3 back (pttblnum-3), PT3Y from shared PTTBL Y field, PT5X from shared id field. When PTTBL header fields are zero, geometry-based fallback from BOX/CBOX computes PT pairs. Resolves PLYRDSQ2 PT pair output to 5/6 match (2 cosmetic sentinel differences: PT0X = 0 vs -32768).
 38. **Old-format palette offset (v0.91)** — Fixed `pal_ofs` computation for 42-byte IMG_REC files. The conversion was adding both `n*42` (via adjusted `oset`) and `n*IMG_REC_SIZE` (via the palette formula), producing `old_oset + n*92` instead of `old_oset + n*42`. Fixes palette lookups in WWF font files (TROGF15.IMG, TROGF7.IMG).
-39. **Dynamic IHDR output (v0.91)** — Removed hardcoded `CTRL` special case in `write_image_tbl`. The IHDR> directive now fully controls field ordering, grouping (`:W` fields share `.word` lines, `:L` fields get their own line), and formatting (CTRL as hex, others as decimal). Fixes line grouping when PAL:L is skipped via `POF>`.
+39. **Dynamic IHDR output (v0.91)** — Removed hardcoded `CTRL` special case in `write_image_tbl`.
+40. **PTTBL shared entry signed arithmetic (v0.95)** — `&pttbls[pttblnum-2]` for `pttblnum<2` is undefined behavior (negative array index). Replaced with `ptrdiff_t` offset-from-file-base arithmetic. Fixes BB5 CMP=1 cascade (3/7->6/7).
+41. **section_base_bit for continuous IRW (v0.95)** — Instead of resetting `g.irw_bit=0` at each `***>` directive, saves current bit position. Fixes SAG with two `***>` sections in Trog.
+42. **+META cache stores final TBL SAG (v0.95)** — Global cache stores `base_addr + relative_offset`, so cross-section hits get correct base address.
+43. **/OLD IRW header format (v0.95)** — Uses `"4.50 4/27/90"` version string, stores base address at offset 0x2C. The IHDR> directive now fully controls field ordering, grouping (`:W` fields share `.word` lines, `:L` fields get their own line), and formatting (CTRL as hex, others as decimal). Fixes line grouping when PAL:L is skipped via `POF>`.
 
 ### COF and CON Directives
 

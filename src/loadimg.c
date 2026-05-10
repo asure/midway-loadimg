@@ -17,11 +17,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <math.h>
 
-#define VERSION "0.91"
+#define VERSION "0.95"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -220,6 +221,7 @@ typedef struct {
     uint16_t scale_ctrls[4];
     int      n_scales;
     uint32_t checksum;
+    int      sag_is_cached;
 } ImageEntry;
 
 typedef struct {
@@ -1344,6 +1346,9 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     }
 }
 
+/* Section base bit offset for ***> address changes */
+static uint32_t section_base_bit = 0;
+
 /* Write one image entry to TBL file, following the IHDR> directive exactly.
  * Fields are output in IHDR order. SZ_W fields are comma-separated on .word lines;
  * SZ_L fields get their own .long line. The line breaks follow the IHDR spec:
@@ -1380,17 +1385,27 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                     }
                 }
                 if (next_is_pal) {
-                    if (have_pal)
-                        fprintf(fp, "0%xH,%s\r\n", base + ie->sag, ie->pal_name);
-                    else
-                        fprintf(fp, "0%xH,-1\r\n", base + ie->sag);
+                    if (have_pal) {
+                        if (ie->sag_is_cached)
+                            fprintf(fp, "0%xH,%s\r\n", ie->sag, ie->pal_name);
+                        else
+                            fprintf(fp, "0%xH,%s\r\n", base + (ie->sag - section_base_bit), ie->pal_name);
+                    } else {
+                        if (ie->sag_is_cached)
+                            fprintf(fp, "0%xH,-1\r\n", ie->sag);
+                        else
+                            fprintf(fp, "0%xH,-1\r\n", base + (ie->sag - section_base_bit));
+                    }
                     /* Skip the PAL field in the main loop */
                     for (int ni = i + 1; ni < g.n_ihdr; ni++) {
                         int nf = g.ihdr[ni].field;
                         if (nf == IHDR_PAL) { i = ni; break; }
                     }
-                } else {
-                    fprintf(fp, "0%xH\r\n", base + ie->sag);
+            } else {
+                if (ie->sag_is_cached)
+                    fprintf(fp, "0%xH\r\n", ie->sag);
+                else
+                    fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
                 }
             } else if (f == IHDR_PAL) {
                 if (have_pal)
@@ -1502,7 +1517,9 @@ static void parse_addr(const char *line) {
     g.base_addr = (uint32_t)addr;
     g.end_addr = (uint32_t)end;
     g.bank = bank;
-    g.irw_bit = 0;
+    /* IRW is continuous; SAG = base + (irw_bit - section_base_bit).
+     * Each ***> saves the current irw_bit as the section base. */
+    section_base_bit = g.irw_bit;
 }
 
 /* Find palette by adjusting for defaults */
@@ -1528,11 +1545,12 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         strncpy(last_imgpath, cur->imgpath, MAX_PATH-1);
         last_imgpath[MAX_PATH-1] = 0;
     }
-    /* +META suffix cache: reset per ---- line so same-suffix sharing is
-     * scoped to a single line (e.g., GWENHL1+GHL1L,GWENHC1+GHL1L share SAG) */
-    char sag_suffix_cache[MAX_IMAGES][MAX_NAME];
-    uint32_t sag_suffix_sags[MAX_IMAGES];
-    int n_sag_suffix = 0;
+    /* +META suffix cache: GLOBAL — same suffix = same SAG across entire LOD.
+     * The +META modifier is a display parameter, independent of which IMG
+     * provides the base image (e.g., ELSTP0+STP0L shares SPSTP0+STP0L's SAG). */
+    static char sag_suffix_cache[MAX_IMAGES][64];
+    static uint32_t sag_suffix_sags[MAX_IMAGES];
+    static int n_sag_suffix = 0;
 
     const char *p = line + 5;
     while (*p) {
@@ -1579,14 +1597,14 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             strncpy(suffix, plus, 63);
             *plus = 0;
         }
-        const char *label_name = (plus) ? base_name : name;
-
         /* Check if same +META suffix was already encoded (reuse SAG) */
+        int cache_hit = 0;
         uint32_t reuse_sag = 0;
         if (suffix[0]) {
             for (int sci = 0; sci < n_sag_suffix; sci++) {
                 if (strcmp(sag_suffix_cache[sci], suffix) == 0) {
                     reuse_sag = sag_suffix_sags[sci];
+                    cache_hit = 1;
                     break;
                 }
             }
@@ -1800,15 +1818,18 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                   if (entry_off + PTTBL_HDR_SIZE <= file_size)
                       ie->pttbl = &cur->imgfile->pttbls[rec->pttblnum];
               }
-              if (rec->pttblnum >= 2 && rec->pttblnum - 2 < cur->imgfile->n_pttbls) {
-                  size_t entry_off = (uint8_t*)&cur->imgfile->pttbls[rec->pttblnum - 2] - cur->imgfile->data;
-                  if (entry_off + PTTBL_HDR_SIZE <= file_size)
-                      ie->pttbl_shared = &cur->imgfile->pttbls[rec->pttblnum - 2];
-              }
-              if (rec->pttblnum >= 3 && rec->pttblnum - 3 < cur->imgfile->n_pttbls) {
-                  size_t entry_off = (uint8_t*)&cur->imgfile->pttbls[rec->pttblnum - 3] - cur->imgfile->data;
-                  if (entry_off + PTTBL_HDR_SIZE <= file_size)
-                      ie->pttbl_pt0x = &cur->imgfile->pttbls[rec->pttblnum - 3];
+              /* LOADW accesses pttbls[pttblnum-2] and pttbls[pttblnum-3] unconditionally
+               * (no >= 2 / >= 3 guard), so pttblnum=0,1 reach into the palette data area
+               * before pttbls[0]. Match this behavior: use signed arithmetic to allow
+               * negative offsets as long as the result stays within the file buffer. */
+              {
+                  ptrdiff_t pttbls_off = (uint8_t*)cur->imgfile->pttbls - cur->imgfile->data;
+                  ptrdiff_t sh_off  = pttbls_off + (ptrdiff_t)(rec->pttblnum - 2) * (ptrdiff_t)sizeof(PTTBL);
+                  ptrdiff_t pt0_off = pttbls_off + (ptrdiff_t)(rec->pttblnum - 3) * (ptrdiff_t)sizeof(PTTBL);
+                  if (sh_off >= 0 && sh_off + PTTBL_HDR_SIZE <= (ptrdiff_t)file_size)
+                      ie->pttbl_shared = (PTTBL*)(cur->imgfile->data + sh_off);
+                  if (pt0_off >= 0 && pt0_off + PTTBL_HDR_SIZE <= (ptrdiff_t)file_size)
+                      ie->pttbl_pt0x = (PTTBL*)(cur->imgfile->data + pt0_off);
               }
               if (!ie->pttbl_pt0x) ie->pttbl_pt0x = ie->pttbl_shared ? ie->pttbl_shared : ie->pttbl;
           }
@@ -1916,18 +1937,22 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             }
         }
 
-          if (reuse_sag > 0) {
+          if (cache_hit) {
+              /* Cache stores final TBL SAG (base + relative); use directly */
               ie->sag = reuse_sag;
+              ie->sag_is_cached = 1;
           } else if (dedup_idx >= 0) {
               ie->sag = dedup_table[dedup_idx].sag;
               if (g.verbose)
                   printf("  Checksum match on image [%s].\n", name);
           } else {
               ie->sag = encode_image(cur->imgfile, rec, &cp, bpp & 0xff);
-              /* Cache SAG by +META suffix for same-suffix reuse */
+              /* Cache final TBL SAG (base + relative) for same-suffix reuse.
+               * Stores the full output value so cache hits in different
+               * ***> sections get the correct base address. */
               if (suffix[0] && n_sag_suffix < MAX_IMAGES) {
-                  strncpy(sag_suffix_cache[n_sag_suffix], suffix, MAX_NAME-1);
-                  sag_suffix_sags[n_sag_suffix] = ie->sag;
+                  strncpy(sag_suffix_cache[n_sag_suffix], suffix, 63);
+                  sag_suffix_sags[n_sag_suffix] = g.base_addr + (ie->sag - section_base_bit);
                   n_sag_suffix++;
               }
               if (g.dedup && n_dedup < MAX_DEDUP) {
@@ -2898,13 +2923,27 @@ static void process_lod(const char *lod_path) {
 static void write_irw(const char *path) {
     uint8_t hdr[IRW_HDR_SIZE];
     memset(hdr, 0, sizeof(hdr));
-    strncpy((char*)hdr, IRW_DATE_STR, strlen(IRW_DATE_STR));
+    if (g.old_mode) {
+        strncpy((char*)hdr, "4.50 4/27/90", 12);
+    } else {
+        strncpy((char*)hdr, IRW_DATE_STR, strlen(IRW_DATE_STR));
+    }
 
     uint32_t data_bytes = (g.irw_bit + 7) / 8;
+    /* n_images at 0x20 (uint16 LE) */
     hdr[0x20] = (uint8_t)((g.n_images >> 0) & 0xff);
     hdr[0x21] = (uint8_t)((g.n_images >> 8) & 0xff);
-    hdr[0x22] = g.global_bpp;
-    hdr[0x2e] = 0x02;
+    /* base_addr from ***> at 0x2C (uint32 LE) */
+    uint32_t base = g.base_addr;
+    if (g.dual_bank) {
+        int dbank = g.base_addr >= 0x2000000 ? (int)((g.base_addr - 0x2000000) / 0x4000000) : 0;
+        base += (uint32_t)dbank * 0x2000000;
+    }
+    hdr[0x2C] = (uint8_t)((base >> 0) & 0xff);
+    hdr[0x2D] = (uint8_t)((base >> 8) & 0xff);
+    hdr[0x2E] = (uint8_t)((base >> 16) & 0xff);
+    hdr[0x2F] = (uint8_t)((base >> 24) & 0xff);
+    /* data size at 0x30 (uint32 LE) */
     uint32_t total_size = IRW_HDR_SIZE + data_bytes;
     hdr[0x30] = (uint8_t)(total_size & 0xff);
     hdr[0x31] = (uint8_t)((total_size >> 8) & 0xff);

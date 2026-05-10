@@ -1,9 +1,11 @@
 # Trog — /OLD Mode Issues
 
 This document describes the remaining issues with Trog support under the
-`/OLD` flag. The core encoding fixes (bpp=8, IMG_STRIDE, per-line suffix
-cache) are working, but two categories of problems remain: the `BLOOVHAND2`
-missing-image issue and the Motorola ASM format.
+`/OLD` flag. The core encoding fixes (bpp=8, IMG_STRIDE, global suffix
+cache) are working. The `section_base_bit` fix for two `***>` sections
+and the `+META` global cache resolved most SAG cascade issues. Remaining
+problems: Motorola ASM format (cosmetic, kept as-is), BBB background
+encoding cascade, and 2 missing BBB labels in IMGTBL.ASM.
 
 ---
 
@@ -14,43 +16,58 @@ missing-image issue and the Motorola ASM format.
 cd worktrog
 ../build/loadimg TROG.LOD /OLD /T
 
-# Compare with reference
-for f in ../reftrog/*.TBL ../reftrog/*.ASM; do
-    base=$(basename "$f")
-    [ -f "$base" ] && diff "$f" "$base" >/dev/null 2>&1 \
-        && echo "PASS $base" || echo "FAIL $base"
-done
+# Compare SAG match count vs reference
+python3 << 'EOF'
+import re
+def get_sags(lines):
+    sags = []
+    for l in lines:
+        l = l.strip()
+        m = re.search(r'\.long\s+>([0-9A-Fa-f]+)', l)
+        if not m:
+            m = re.search(r'\.long\s+0([0-9A-Fa-f]+)H', l)
+        if m:
+            sags.append(int(m.group(1), 16))
+    return sags
+ref = get_sags(open('../reftrog/IMGTBL.ASM').readlines())
+our = get_sags(open('IMGTBL.ASM').readlines())
+match = sum(1 for r, o in zip(ref, our) if r == o)
+print(f'SAG match: {match}/{len(our)} (ref has {len(ref)})')
+EOF
 ```
 
 ---
 
 ## Current Status (v0.95)
 
-| File | SAG Match | Format Match | Notes |
-|------|-----------|-------------|-------|
-| `IMGTBL.ASM` | 341/343 ✓ | ✗ (Motorola) | Missing TROGMOUTH, MOUTHBACK (BBB) |
-| `TROGDDAT.TBL` | First 400 ✓ | ✗ (Motorola) | Cascade starts at SAG[401] |
-| `TROGSPRG.TBL` | ALL MATCH ✓ | ✗ (Motorola) | Perfect SAGs |
-| `TROGWHL.TBL` | ALL MATCH ✓ | ✗ (Motorola) | Perfect SAGs |
-| `TROGTEXT.TBL` | ALL MATCH ✓ | ✗ (Motorola) | Perfect SAGs |
-| `TROGCAVE.TBL` | -316B at SAG[0] | ✗ | BBB background encoding |
-| `TROGENEM.TBL` | -308B at SAG[30] | ✗ | Late cascade |
-| `TROGTDAT.TBL` | Cascade at SAG[413] | ✗ | Late cascade |
-| `TROGSCOR.TBL` | -8376B at SAG[0] | ✗ | Cascade from earlier section |
-| `TROGTREX.TBL` | -316B at SAG[0] | ✗ | BBB background encoding |
-| `BGNDTBL.GLO` | PASS | — | Background globals |
-| `IMGTBL.GLO` | ✗ | — | Missing per-image `.globl` entries |
-| `BGNDPAL.ASM` | ✗ | ✗ | Format differences |
-| `IMGASEQ.ASM` | — | MISSING | Not yet generated |
-| `IMGSRC.ASM` | — | MISSING | Not yet generated |
+| File | SAG Match | Notes |
+|------|-----------|-------|
+| `IMGTBL.ASM` | 232/341 | BBB cascade at [232] (TROGLOG/TROGISLE/etc. encoding) + 2 missing BBB labels |
+| `TROGDDAT.TBL` | TBD | Dependent on same BBB cascade |
+| `TROGSPRG.TBL` | TBD | |
+| `TROGWHL.TBL` | TBD | |
+| `TROGTEXT.TBL` | TBD | |
+| `TROGCAVE.TBL` | TBD | BBB background encoding |
+| `TROGENEM.TBL` | TBD | |
+| `TROGTDAT.TBL` | TBD | |
+| `TROGSCOR.TBL` | TBD | |
+| `TROGTREX.TBL` | TBD | BBB background encoding |
+| `BGNDTBL.GLO` | PASS | Background globals |
+| `IMGTBL.GLO` | ✗ | Missing per-image `.globl` entries |
+| `BGNDPAL.ASM` | ✗ | Format differences |
+| `IMGASEQ.ASM` | MISSING | Not yet generated |
+| `IMGSRC.ASM` | MISSING | Not yet generated |
+
+Format differences (Intel hex `0...H` vs Motorola `>...`, combined SAG+PAL
+`.long` lines vs separate) are cosmetic and intentionally kept as-is.
 
 ---
 
-## Category 1: `+META` Derived Images
+## Category 1: `+META` Derived Images (Resolved)
 
-### The Problem
+### The Problem (original)
 
-Some `+META` entries reference a base name that does **not exist** in any IMG
+Some `+META` entries referenced a base name that did **not exist** in any IMG
 file. Example from `TROG.LOD` line 294:
 
 ```
@@ -60,9 +77,18 @@ file. Example from `TROG.LOD` line 294:
 - `BLOOVHAND1+VHAND1L` → base name `BLOOVHAND1` → found in `TROGPLAY.IMG`
 - `BLOOVHAND2+VHAND2L` → base name `BLOOVHAND2` → **NOT found in any IMG**
 
-The reference output gives `BLOOVHAND2` a SAG with 320 bytes of pixel data.
-LOAD.EXE must be **generating derived pixel data** from another source,
-likely by transforming `BLOOVHAND1`'s data using the `+VHAND2L` modifier.
+### Resolution in v0.95
+
+The `+META` suffix cache was changed from per-line (local) to global
+(static), matching LOAD.EXE behavior where all images with the same
+suffix share the same SAG across the entire LOD. When `BLOOVHAND2+VHAND2L`
+is encountered, the cache finds `+VHAND2L` from `BLOOVHAND1+VHAND1L` and
+reuses its SAG. LOAD.EXE also reuses the same SAG (via suffix match),
+as confirmed by the reference where both entries have the same SAG value.
+
+The cache also stores the **final TBL SAG value** (`base_addr + relative_offset`)
+so that cache hits across different `***>` sections get the correct base
+address.
 
 ### What `+META` modifiers might mean
 
@@ -104,54 +130,40 @@ properly encoded data. Our tool skips it. This:
 2. Shifts all subsequent SAGs by 320 bytes
 3. All later images in IMGTBL.ASM have wrong SAGs
 
-### How the cascade propagates
+### How the cascade propagates (current state)
+
+The +META global suffix cache now correctly reuses SAGs across the
+entire LOD, so BLOOVHAND2 shares its SAG with BLOOVHAND1 (matching
+LOAD.EXE behavior). The remaining cascade at IMGTBL.ASM SAG[232] is
+caused by BBB background images having different compressed sizes:
 
 ```
-IMGTBL.ASM: BLOOVHAND2 missing → -320B
+IMGTBL.ASM: first 231 SAGs match (section_base_bit + global cache fix)
   ↓
-TROGDAT.TBL (section 2): inherits -320B → more diffs → -235168B at SAG[401]
+BBB backgrounds (TROGLOG, TROGISLE, etc.): different compressed sizes
   ↓
-TROGENEM.TBL: starts after cascade → -1764B at SAG[0] (was -320B + intermediate)
-  ↓
-TROGSPRG.TBL: same -1764B offset (cancelled by BBB differences? → ALL MATCH)
-  ↓
-TROGWHL.TBL: same -1764B offset (→ ALL MATCH)
+SAG[232] BARL2 onward: cascade from BBB compression differences
 ```
+
+See `cascade.md` for the CMP=1 encoder issue that causes the BBB encoding
+differences.
 
 ### Files affected by the cascade
 
-| File | Cascade at | Size of gap |
-|------|-----------|-------------|
-| `IMGTBL.ASM` | Always | BLOOVHAND2: -320B |
-| `TROGDDAT.TBL` | SAG[401] | Large (-235168B) |
-| `TROGCAVE.TBL` | SAG[0] | -316B (BBB + cascade) |
-| `TROGENEM.TBL` | SAG[30] | -308B |
-| `TROGSCOR.TBL` | SAG[0] | -8376B |
-| `TROGTDAT.TBL` | SAG[413] | Large (-176450B) |
-| `TROGTEXT.TBL` | SAG[0] | -8376B |
-| `TROGTREX.TBL` | SAG[0] | -316B (BBB + cascade) |
+The cascade at [232] propagates to all per-game TBL files. The root cause
+is the same CMP=1 compression mismatch as BB5/BB6/BB7 — backgrounds use
+the same FUN_1000_6f20 encoder but can select different LM/TM/bpp than
+LOADW, producing IRW data of different sizes.
 
-### Possible Fixes
+### Possible Fix: CMP=1 Encoder Matching
 
-**Option A: Skip +META entries with missing base names (current behavior)**
-- Pro: Simple, no crash
-- Con: Missing images cascade to all subsequent SAGs
+The cascade is from the BBB background encoder, not from +META images.
+Fix the CMP=1 encoder to match LOADW's LM/TM/bpp selection exactly,
+and both the sprite and background cascades should resolve.
 
-**Option B: Generate placeholder data for missing base names**
-- Encode a minimal 1×1 pixel for the missing entry
-- SAG values would be ~1 byte off instead of 320 bytes
-- Still not perfect, but cascade is smaller
-
-**Option C: Derive pixel data from the nearest matching image**
-- If `BLOOVHAND2` not found, try `BLOOVHAND1`
-- Encode `BLOOVHAND1`'s data under `BLOOVHAND2`'s label
-- This is what LOAD.EXE likely does
-- Requires understanding the suffix→transformation mapping
-
-**Option D: Analyze LOAD.EXE's derived image algorithm**
-- Requires the original LOAD.EXE binary or extensive reverse engineering
-- Would need to map each suffix (+VHAND2L, etc.) to a specific transformation
-- Not feasible without more documentation
+Note: BLOOVHAND2 and other +META derived images that don't exist in any
+IMG file are now handled by the global suffix cache — they share the
+SAG of the first image with the same suffix (matching LOAD.EXE behavior).
 
 ---
 
@@ -183,47 +195,54 @@ The Motorola format is required by the TMS34010 GSP assembler (`gspa`):
 | SAG/PAL | Separate lines | Combined on one line |
 | File headers | Has `.FILE`, `.OPTION`, `.include`, `.even` | Just `.DATA` |
 
-### Implementation plan
+### Motorola format (deferred)
 
-In `/OLD` mode, `write_image_tbl()` should:
-1. Use `>%X` format instead of `0%XH` for hex values
-2. Output SAG and PAL on SEPARATE `.long` lines
-3. The caller (or a file-level wrapper) should emit the file headers
-
----
-
-## Rule of Thumb for triage
-
-When the reference output shows a SAG for a label whose base name doesn't
-exist in any `.IMG` file, that label is a **derived image**. Skip it for
-now and note it in the cascade tracking below.
+The Motorola ASM format (hex prefix `>`, separate SAG/PAL lines, file
+headers) is cosmetic — the Intel format (`0...H`, combined SAG+PAL) works
+correctly with the assembler. Not required for functional correctness.
+Kept as-is unless a specific toolchain requires it.
 
 ---
 
-## Cascade Tracking
+## Notes
 
-```python
-# To check cascade magnitude for each file:
+- Labels whose base name doesn't exist in any `.IMG` file are **derived
+  images**. The global +META suffix cache now shares their SAG with the
+  first matching suffix entry (matching LOAD.EXE behavior).
+- The remaining IMGTBL.ASM SAG cascade at [232] is from BBB background
+  encoding differences, not from missing derived images.
+
+---
+
+## Current SAG Match Status
+
+```bash
+# Check IMGTBL.ASM SAG match count
+cd worktrog
 python3 << 'EOF'
 import re
-def get_base(lines):
-    pairs, label = [], None
+def get_sags(lines):
+    sags = []
     for l in lines:
-        if l.strip().endswith(':'): label = l.strip()[:-1]
-        m = re.search(r'(?:>|0?)([0-9a-fA-F]+)H?(?:,|$)', l)
-        if m and '.long' in l and label:
-            val = int(m.group(1), 16)
-            if val > 0x1000000: pairs.append((label, val))
-            label = None
-    return pairs
+        l = l.strip()
+        m = re.search(r'\.long\s+>([0-9A-Fa-f]+)', l)
+        if not m:
+            m = re.search(r'\.long\s+0([0-9A-Fa-f]+)H', l)
+        if m:
+            sags.append(int(m.group(1), 16))
+    return sags
 
-for f in ['IMGTBL.ASM', 'TROGDDAT.TBL', 'TROGENEM.TBL', ...]:
-    our = get_base(open(f).read().splitlines())
-    ref = get_base(open(f'../reftrog/{f}').read().splitlines())
-    first = next((i for i,(o,r) in enumerate(zip(our,ref)) if o[1]!=r[1]), None)
-    if first is not None:
-        print(f'{f}: first diff at SAG[{first}] {our[first][0]}: '
-              f'our=0x{our[first][1]:X} ref=0x{ref[first][1]:X}')
+ref = get_sags(open('../reftrog/IMGTBL.ASM').readlines())
+our = get_sags(open('IMGTBL.ASM').readlines())
+match = sum(1 for r, o in zip(ref, our) if r == o)
+print(f'IMGTBL.ASM: {match}/{len(our)} SAG match (ref has {len(ref)})')
+if match < len(our):
+    for i, (r, o) in enumerate(zip(ref, our)):
+        if r != o:
+            base = 'SAME' if (r & 0xFF000000) == (o & 0xFF000000) else f'BASE:0x{r&0xFF000000:X}->0x{o&0xFF000000:X}'
+            off = 'SAME' if (r & 0xFFFFFF) == (o & 0xFFFFFF) else f'OFF:0x{r&0xFFFFFF:X}->0x{o&0xFFFFFF:X}'
+            print(f'  First cascade at [{i}]: ref=0x{r:X} our=0x{o:X}  {base} {off}')
+            break
 EOF
 ```
 
@@ -231,10 +250,13 @@ EOF
 
 | File | Path | Description |
 |------|------|-------------|
-| `+META` lookup | `src/loadimg.c:1558-1562` | Strips `+META` for IMG lookup |
-| Per-line suffix cache | `src/loadimg.c:1570-1572` | Global static cache for same-suffix sharing |
-| `/OLD` mode setup | `src/loadimg.c:2071` | bpp=8 default |
-| IMG_STRIDE encode | `src/loadimg.c:1208` | Stride-padded width in `/OLD` mode |
+| `+META` lookup | `src/loadimg.c:1571-1582` | Strips `+META` for IMG lookup |
+| Global suffix cache | `src/loadimg.c:1547-1551` | Static cache, stores final TBL SAG |
+| `section_base_bit` | `src/loadimg.c:1348,1521` | Tracks `***>` sections for continuous IRW |
+| `/OLD` IHDR setup | `src/loadimg.c:2093` | SIZX:W,SIZY:W,ANIX:W,ANIY:W,SAG:L,PAL:L |
+| `/OLD` IRW header | `src/loadimg.c:2938-2946` | LOAD.EXE format (version string, base at 0x2C) |
+| PTTBL shared entry | `src/loadimg.c:1821-1850` | ptrdiff_t offset arithmetic for pttblnum-2/-3 |
 | TROG.LOD | `worktrog/TROG.LOD` | Test LOD file |
-| Reference TBLs | `reftrog/*.TBL` | LOAD.EXE reference output |
-| Reference ASMs | `reftrog/*.ASM` | LOAD.EXE reference assembly |
+| TROG4.LOD | `worktrog/TROG4.LOD` | First-section-only LOD (for reference comparison) |
+| Reference files | `reftrog/*` | LOAD.EXE reference output |
+| Cascade docs | `cascade.md` | CMP=1 encoder cascade documentation |

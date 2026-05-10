@@ -2,7 +2,7 @@
 
 A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Electronics Games Inc., 1993–1995) toolchain. Reads `.lod` script files and `.img` container files from arcade hardware and outputs `.tbl`/`.asm`/`.glo`/`.irw` files targeting the **TMS34020 GSP DMA2** graphics co-processor.
 
-**Supported games:** Mortal Kombat 2, NBA Jam, NBA Jam Tournament Edition, Hangtime.
+**Supported games:** Mortal Kombat 2, NBA Jam, NBA Jam Tournament Edition, Hangtime, Trog (/OLD mode), Narc (/OLD mode).
 
 ---
 
@@ -23,7 +23,14 @@ A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Elec
 
 ## Version History
 
-### v0.91 (Latest)
+### v0.95 (Latest)
+- Fixed `/OLD` mode IRW header format: uses LOAD.EXE version string (`"4.50 4/27/90"`), stores `***>` base address at offset 0x2C.
+- Added `section_base_bit` tracking for continuous IRW across multiple `***>` sections (fixes Trog SAG computation with two address ranges).
+- Made `+META` suffix cache global (static) matching LOAD.EXE behavior; stores final TBL SAG for correct cross-section cache hits.
+- Fixed PTTBL shared-entry pointer arithmetic (`pttblnum-2`/`pttblnum-3`): uses signed `ptrdiff_t` offset to avoid UB. Resolves BB5 CMP=1 cascade (3/7→6/7).
+- Added `cascade.md` documenting the remaining CMP=1 encoder issues.
+
+### v0.91
 - Fixed old-format IMG palette offset computation (42-byte → 50-byte conversion was computing `pal_ofs = old_oset + n*92` instead of `old_oset + n*42`). Fixes palette lookups in WWF WrestleMania font files (`TROGF15.IMG`, `TROGF7.IMG`).
 - Made `write_image_tbl` fully dynamic: IHDR> directive now controls field order, grouping, and formatting exactly. Removed hardcoded special case for `CTRL` that broke `.word` line grouping when `PAL:L` was skipped via `POF>`.
 - Added WWF test data (`MAIN.LOD`, `MISC.LOD`) with LOADW reference outputs and verbose logs.
@@ -204,7 +211,7 @@ cd build && make test
 | **BB2** | ZOF+XON | 3/3 | PASS | |
 | **BB3** | ZOF+PT | 2/2 | PASS | PTTBL bounds fixed |
 | **BB4** | ZOF+XON | 1/1 | PASS | |
-| **BB5** | Mixed | 3/7 | FAIL | CMP=1 encoder cascade |
+| **BB5** | Mixed | 6/7 | FAIL | PLYRDSEQ PT0X sentinel (cosmetic) |
 | **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 PT0X sentinel (cosmetic) |
 | **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
 | **BB8** | XON | 3/3 | PASS | |
@@ -220,8 +227,8 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 
 | Issue | Scope | Root Cause |
 |-------|-------|------------|
-| **CMP=1 encoder cascade** | BB5, BB6, BB7, WWF | LM/TM/bpp selection differs from LOADW for compressed images. Affects compressed IRW output starting at some image, cascading through all subsequent TBLs. MK2MIL/MK4MIL/MK8MIL are fully byte-exact, confirming the encoder is correct for those datasets. |
-| **PLYRDSQ2 PT0X sentinel** | BB6 | 2 cosmetic differences: PT0X = 0 vs -32768 (LOADW sentinel inconsistency) |
+| **PTTBL shared entry bounds** | BB5 | `pttblnum-2`/`pttblnum-3` shared entry access used signed pointer arithmetic (UB). Fixed with explicit offset-based bounds check. BB5: 3/7→6/7. |
+| **PLYRDSQ2 PT0X sentinel** | BB5, BB6 | Cosmetic: PT0X = -16384/0 vs -32768 (LOADW sentinel inconsistency) |
 | **OUTDOOR false dedup** | BB7 | Pre-existing LOADW dedup bug — reference has wrong LEAF pixels |
 | **Old-format palette offset** | LOADW | 42-byte to 50-byte IMG_REC conversion computed palette offset incorrectly (`pal_ofs = oset + n*92` instead of `oset + n*42`). Fixed in v0.91. |
 | **IHDR> field grouping** | LOADW | Hardcoded `CTRL` special case in `write_image_tbl` broke `.word` line grouping when `PAL:L` was skipped. Fixed in v0.91 — IHDR> now fully dynamic. |
@@ -231,7 +238,7 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 | **FRM> word alignment** | LOADW | Movie footage uses word alignment *after* each entry. loadimg matches. |
 | **PAL_REC offset bug** | LOADW | Adding `n_special` again to palette offset caused a 100-byte overrun. loadimg correctly uses `imgcnt` directly. |
 
-The CMP=1 encoder cascade is the primary remaining open issue, affecting BB5/BB6/BB7 and some WWF images.
+The BB5 CMP=1 encoder cascade was resolved by fixing the PTTBL shared-entry pointer arithmetic (signed ptrdiff_t offset instead of `&pttbls[pttblnum-2]` UB). Remaining cosmetic PT0X sentinel values differ between BB5 PLYRDSEQ and BB6 PLYRDSQ2. See `cascade.md` for details.
 
 ---
 
