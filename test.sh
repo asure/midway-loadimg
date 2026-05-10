@@ -64,14 +64,14 @@ test_lod workArt refArt BB8 "PLYRRSEQ PLYRHD6 MUGSHOT8"
 test_lod workArt refArt BBMUG "PLYRHD3 PLYRHD5"
 test_lod workArt refArt BBVDA "BBVDA"
 
-# workwwf: WWF WrestleMania arcade data
-test_lod workwwf refwwf BAM "BAMIMG"
-
 # worktrog: Trog /OLD mode (LOADE.EXE)
 test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX TROGIMG" "/OLD"
 
 # worknarc: Narc /OLD mode (LOADE.EXE, RLC encoding)
 test_lod worknarc refnarc NARC1 "NARC1IMG NARCBON NARCBUG NARCCAD NARCCHOP NARCDOG NARCDUMP NARCENT NARCGANG NARCHEAD NARCHOOK NARCHYPO NARCLAB NARCLOAF NARCLOWN NARCMBIG NARCMUGS NARCPIMP NARCPLAY NARCPORS NARCRAMB NARCTEXT" "/OLD"
+
+# workcarn: Total Carnage /OLD2 mode (LOADE.EXE 4.65)
+test_lod workcarn refcarn CARN "AKHBBOSS FINGRNT HBASE JEEP JET ORCUS PLYR RACKUP SHAWN TEXT THROW TITLE WARP" "/OLD2"
 
 # BBPAL is palette-only (ASM> junkxxxx, no TBL output)
 # workht: misc.lod from NBA Jam/Hangtime (headerless, dual-bank)

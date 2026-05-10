@@ -268,7 +268,7 @@ typedef struct {
     int      append;
     int      ppp;
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
-    int      old_mode;   /* 1 if /OLD flag: legacy LOAD.EXE output (no IHDR, SAG+PAL on same .long, RLC>) */
+    int      old_mode;   /* 1=/OLD (LOAD.EXE 4.50), 2=/OLD2 (LOAD.EXE 4.65): legacy output */
     int      rlc;        /* 1 if RLC> active: 2bpp run-length encoding */
 
     char     imgdir[MAX_PATH];
@@ -423,7 +423,7 @@ static uint16_t loadw_checksum(uint8_t *pix, int stride, int w, int h, uint16_t 
 
 #define MAX_DEDUP 4096
 typedef struct {
-    uint16_t sum, max_val, sum2;  /* sum2 = second hash for collision disambiguation */
+    uint16_t sum, max_val, sum2;  /* word sum + byte sum for collision disambiguation */
     int sizx, sizy;
     uint16_t ctrl;
     uint32_t sag;
@@ -1920,10 +1920,6 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              int pix_bytes = pstride * rec->h;
              uint16_t max_val;
              uint16_t ck = loadw_checksum(pix_data, pstride, rec->w, rec->h, &max_val);
-             /* Compute byte-sum hash to disambiguate 16-bit word-sum collisions.
-              * Two images with the same word-sum but different byte-sums are
-              * guaranteed to be different (e.g. odd-length buffers where the
-              * last byte is excluded from word-sum). */
              uint16_t ck2 = 0;
              for (int i = 0; i < pix_bytes; i++)
                  ck2 = (uint16_t)(ck2 + pix_data[i]);
@@ -1962,7 +1958,6 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 uint16_t max_val;
                 dedup_table[n_dedup].sum = loadw_checksum(pix_data, pstride, rec->w, rec->h, &max_val);
                 dedup_table[n_dedup].max_val = max_val;
-                /* Compute byte-sum hash to match the lookup check */
                 uint16_t ck2 = 0;
                 for (int i = 0; i < pix_bytes; i++)
                     ck2 = (uint16_t)(ck2 + pix_data[i]);
@@ -2923,7 +2918,9 @@ static void process_lod(const char *lod_path) {
 static void write_irw(const char *path) {
     uint8_t hdr[IRW_HDR_SIZE];
     memset(hdr, 0, sizeof(hdr));
-    if (g.old_mode) {
+    if (g.old_mode == 2) {
+        strncpy((char*)hdr, "4.65 9/3/91", 12);
+    } else if (g.old_mode == 1) {
         strncpy((char*)hdr, "4.50 4/27/90", 12);
     } else {
         strncpy((char*)hdr, IRW_DATE_STR, strlen(IRW_DATE_STR));
@@ -2984,15 +2981,16 @@ static void print_usage(const char *arg) {
     printf("  /B         bpp from palette size\n");
     printf("  /3         Limit scales to 3\n");
     printf("  /A         Append mode (don't overwrite existing tables)\n");
-    printf("  /OLD       Legacy LOAD.EXE mode for older games (Narc, Trog).\n");
-    printf("               Old-style output: no CTRL field, SAG+PAL on same .long line,\n");
-    printf("               RLC> run-length encoding directive.\n");
+    printf("  /OLD       Legacy LOAD.EXE 4.50 (4/27/90) mode (Narc, Trog).\n");
+    printf("  /OLD2      Legacy LOAD.EXE 4.65 (9/3/91) mode (Total Carnage).\n");
+    printf("               Old-style: no CTRL field, SAG+PAL on same .long line,\n");
+    printf("               RLC> run-length encoding, 8bpp default.\n");
     printf("  /H         This help\n");
     printf("\n");
     if (arg) {
         printf("Unknown argument: %s\n", arg);
         printf("Did you mean one of these?\n");
-        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /OLD, /H\n");
+        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /OLD, /OLD2, /H\n");
         printf("\n");
     }
     printf("Example:\n");
@@ -3024,7 +3022,8 @@ int main(int argc, char *argv[]) {
         if (a[0] == '/') {
             /* Multi-char flags before single-char switch */
             { char abuf[64]; strncpy(abuf, a, 63); abuf[63] = 0; upcase(abuf);
-              if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; } }
+              if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; }
+              if (strcmp(abuf, "/OLD2") == 0) { g.old_mode = 2; continue; } }
 
             char flag = (char)toupper((unsigned char)a[1]);
             char *val = a + 2;
@@ -3067,6 +3066,8 @@ int main(int argc, char *argv[]) {
     }
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
+
+    if (g.old_mode == 1) g.dedup = 0;  /* /OLD: LOAD.EXE 4.50 has no CON> dedup */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
 
