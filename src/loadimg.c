@@ -268,7 +268,7 @@ typedef struct {
     int      append;
     int      ppp;
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
-    int      old_mode;   /* 1 if /OLD flag: legacy LOAD.EXE output (no IHDR, SAG+PAL on same .long, RLC>) */
+    int      old_mode;   /* 1=/OLD (LOAD.EXE 4.50), 2=/OLD2 (LOAD.EXE 4.65): legacy output */
     int      rlc;        /* 1 if RLC> active: 2bpp run-length encoding */
 
     char     imgdir[MAX_PATH];
@@ -2921,7 +2921,9 @@ static void process_lod(const char *lod_path) {
 static void write_irw(const char *path) {
     uint8_t hdr[IRW_HDR_SIZE];
     memset(hdr, 0, sizeof(hdr));
-    if (g.old_mode) {
+    if (g.old_mode == 2) {
+        strncpy((char*)hdr, "4.65 9/3/91", 12);
+    } else if (g.old_mode == 1) {
         strncpy((char*)hdr, "4.50 4/27/90", 12);
     } else {
         strncpy((char*)hdr, IRW_DATE_STR, strlen(IRW_DATE_STR));
@@ -2982,15 +2984,16 @@ static void print_usage(const char *arg) {
     printf("  /B         bpp from palette size\n");
     printf("  /3         Limit scales to 3\n");
     printf("  /A         Append mode (don't overwrite existing tables)\n");
-    printf("  /OLD       Legacy LOAD.EXE mode for older games (Narc, Trog).\n");
-    printf("               Old-style output: no CTRL field, SAG+PAL on same .long line,\n");
-    printf("               RLC> run-length encoding directive.\n");
+    printf("  /OLD       Legacy LOAD.EXE 4.50 (4/27/90) mode (Narc, Trog).\n");
+    printf("  /OLD2      Legacy LOAD.EXE 4.65 (9/3/91) mode (Total Carnage).\n");
+    printf("               Old-style: no CTRL field, SAG+PAL on same .long line,\n");
+    printf("               RLC> run-length encoding, 8bpp default.\n");
     printf("  /H         This help\n");
     printf("\n");
     if (arg) {
         printf("Unknown argument: %s\n", arg);
         printf("Did you mean one of these?\n");
-        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /OLD, /H\n");
+        printf("  /R, /T, /F, /I, /D, /V, /E, /P, /L, /B, /3, /A, /OLD, /OLD2, /H\n");
         printf("\n");
     }
     printf("Example:\n");
@@ -3022,7 +3025,8 @@ int main(int argc, char *argv[]) {
         if (a[0] == '/') {
             /* Multi-char flags before single-char switch */
             { char abuf[64]; strncpy(abuf, a, 63); abuf[63] = 0; upcase(abuf);
-              if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; } }
+              if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; }
+              if (strcmp(abuf, "/OLD2") == 0) { g.old_mode = 2; continue; } }
 
             char flag = (char)toupper((unsigned char)a[1]);
             char *val = a + 2;
