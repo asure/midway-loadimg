@@ -1269,11 +1269,15 @@ static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual
     FILE *fp = g.pal_fp;
     if (!fp) return;
     fprintf(fp, "%s:\r\n", pe->name);
-    fprintf(fp, "\t.word\t%3d\r\n", pe->numc);
+    if (g.old_mode)
+        fprintf(fp, "\t.word    %2d\r\n", pe->numc);
+    else
+        fprintf(fp, "\t.word\t%3d\r\n", pe->numc);
 
     int per_line = 8;
+    const char *word_pre = g.old_mode ? "\t.word   " : "\t.word\t";
     for (int i = 0; i < pe->numc; i++) {
-        if (i % per_line == 0) fprintf(fp, "\t.word\t");
+        if (i % per_line == 0) fprintf(fp, "%s", word_pre);
         uint16_t v = colors[i];
         if (v < 0x10)
             fprintf(fp, "%02XH", v);
@@ -3135,7 +3139,10 @@ int main(int argc, char *argv[]) {
         g.pal_fp = fopen(pal_path, g.append ? "a" : "w+");
         if (!g.pal_fp) die("cannot create: %s", pal_path);
         if (!g.append) {
-            fprintf(g.pal_fp, "\t.FILE \"imgpal.asm\"\r\n");
+            if (g.old_mode)
+                fprintf(g.pal_fp, "\t.FILE 'imgpal.asm'\r\n");
+            else
+                fprintf(g.pal_fp, "\t.FILE \"imgpal.asm\"\r\n");
             fprintf(g.pal_fp, "\t.OPTION B,D,L,T\r\n");
             fprintf(g.pal_fp, "\r\n");
             fprintf(g.pal_fp, "\t.include imgtbl.glo\r\n");

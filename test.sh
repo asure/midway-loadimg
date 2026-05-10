@@ -20,7 +20,7 @@ test_lod() {
 
     rm -f "$LODNAME.IRW" *.TBL IMGTBL.ASM IMGTBL.GLO IMGPAL.ASM BGND*.ASM BGND*.GLO 2>/dev/null
     local FLAGS="/P /T"
-    [ "$EXTRA" = "/OLD" ] || [ "$EXTRA" = "/OLD2" ] && FLAGS="/T"
+    if [ "$EXTRA" = "/OLD" ] || [ "$EXTRA" = "/OLD2" ]; then FLAGS="/T"; fi
     if ! timeout 180 "$TOOL" "$LODNAME.LOD" $FLAGS $EXTRA 2>/dev/null; then
         echo "  FAIL $LODNAME: tool error"; ALL_FAIL=$((ALL_FAIL + 1)); return
     fi
