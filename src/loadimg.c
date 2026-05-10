@@ -2815,18 +2815,33 @@ static void process_lod(const char *lod_path) {
                          blk_objs[n_blk].ii = hdr_idx;
                          n_blk++;
                      }
-                     /* Output in BDB file order (no sorting) */
-                      for (int bi = 0; bi < n_blk; bi++) {
-                          if (bi == 0) {
-                              fprintf(g.bgnd_fp, "\t.word\t0%XH\t;flags\r\n", blk_objs[bi].wx);
-                              fprintf(g.bgnd_fp, "\t.word\t%d,%d ;x,y\r\n", blk_objs[bi].x, blk_objs[bi].y);
-                              fprintf(g.bgnd_fp, "\t.word\t0%XH\t;pal5,pal4,hdr13-0\r\n", blk_objs[bi].ii);
-                          } else {
-                             fprintf(g.bgnd_fp, "\t.word\t0%XH,%d,%d,0%XH\r\n",
-                                     blk_objs[bi].wx, blk_objs[bi].x, blk_objs[bi].y, blk_objs[bi].ii);
-                         }
-                     }
-                     fprintf(g.bgnd_fp, "\t.word\t0FFFFH\t;End Marker\r\n");
+                      /* Output in BDB file order (no sorting) */
+                       const char *bw = g.old_mode ? "\t.word   " : "\t.word\t";
+                       const char *bl = g.old_mode ? "\t.long   " : "\t.long\t";
+                       for (int bi = 0; bi < n_blk; bi++) {
+                           if (bi == 0) {
+                               if (g.old_mode)
+                                   fprintf(g.bgnd_fp, "%s0%xH\t;flags\r\n", bw, blk_objs[bi].wx);
+                               else
+                                   fprintf(g.bgnd_fp, "%s0%XH\t;flags\r\n", bw, blk_objs[bi].wx);
+                               fprintf(g.bgnd_fp, "%s%d,%d ;x,y\r\n", bw, blk_objs[bi].x, blk_objs[bi].y);
+                               if (g.old_mode)
+                                   fprintf(g.bgnd_fp, "%s0%xH\t;pal5,pal4,hdr13-0\r\n", bw, blk_objs[bi].ii);
+                               else
+                                   fprintf(g.bgnd_fp, "%s0%XH\t;pal5,pal4,hdr13-0\r\n", bw, blk_objs[bi].ii);
+                           } else {
+                               if (g.old_mode)
+                                   fprintf(g.bgnd_fp, "%s0%xH,%d,%d,0%xH\r\n", bw,
+                                           blk_objs[bi].wx, blk_objs[bi].x, blk_objs[bi].y, blk_objs[bi].ii);
+                               else
+                                   fprintf(g.bgnd_fp, "%s0%XH,%d,%d,0%XH\r\n", bw,
+                                           blk_objs[bi].wx, blk_objs[bi].x, blk_objs[bi].y, blk_objs[bi].ii);
+                          }
+                      }
+                      if (g.old_mode)
+                          fprintf(g.bgnd_fp, "%s0ffffH\t;End Marker\r\n", bw);
+                      else
+                          fprintf(g.bgnd_fp, "%s0FFFFH\t;End Marker\r\n", bw);
                  }
              }
 
@@ -2878,16 +2893,21 @@ static void process_lod(const char *lod_path) {
                         fprintf(g.bgndequ_fp, "H%s .EQU\t%d\r\n", mn, mh);
                     }
                 fprintf(g.bgnd_fp, "%sBMOD:\r\n", mn);
-                fprintf(g.bgnd_fp, "\t.word\t%d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
+                if (g.old_mode)
+                    fprintf(g.bgnd_fp, "\t.word   %d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
+                else
+                    fprintf(g.bgnd_fp, "\t.word\t%d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
+                if (g.old_mode)
+                    fprintf(g.bgnd_fp, "\t.long   %sBLKS, %s, %sPALS\r\n", mn, cur_hdrs, hdr_suffix);
+                else
                     fprintf(g.bgnd_fp, "\t.long\t%sBLKS, %s, %sPALS\r\n", mn, cur_hdrs, hdr_suffix);
                 }
             }
             if (g.bgndtbl_glo_fp) {
-                /* Palette .globl before BMOD (matching LOADW output order) */
                 for (int pi = 0; pi < np; pi++)
-                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%s\r\n", pals[pi].name);
+                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%s\r\n\r\n", pals[pi].name);
                 for (int bi = 0; bi < n_bmod; bi++)
-                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sBMOD\r\n", bmod_list[bi]);
+                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sBMOD\r\n\r\n", bmod_list[bi]);
             }
 
             if (g.bgndpal_fp)
@@ -2903,7 +2923,10 @@ static void process_lod(const char *lod_path) {
                         fprintf(g.bgndpal_fp, "\t.word   %d\t;pal size\r\n", pals[pi].cnt);
                     else
                         fprintf(g.bgndpal_fp, "\t.word\t%d\t;pal size\r\n", pals[pi].cnt);
-                    fputs("\t.word ", g.bgndpal_fp);
+                    if (g.old_mode)
+                        fputs("\t.word  ", g.bgndpal_fp);
+                    else
+                        fputs("\t.word ", g.bgndpal_fp);
                     for (int ci = 0; ci < pals[pi].cnt; ci++) {
                         if (g.old_mode)
                             fprintf(g.bgndpal_fp, "%04xH", pals[pi].colors[ci]);
