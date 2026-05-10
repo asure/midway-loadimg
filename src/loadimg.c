@@ -423,7 +423,7 @@ static uint16_t loadw_checksum(uint8_t *pix, int stride, int w, int h, uint16_t 
 
 #define MAX_DEDUP 4096
 typedef struct {
-    uint16_t sum, max_val, sum2;  /* sum2 = second hash for collision disambiguation */
+    uint16_t sum, max_val, sum2, sum3;  /* sum/sum2/sum3 = triple hash for collision disambiguation */
     int sizx, sizy;
     uint16_t ctrl;
     uint32_t sag;
@@ -1917,19 +1917,21 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              int pstride = IMG_STRIDE(rec->w);
              int pix_bytes = pstride * rec->h;
              uint16_t max_val;
-             uint16_t ck = loadw_checksum(pix_data, pstride, rec->w, rec->h, &max_val);
-             /* Compute byte-sum hash to disambiguate 16-bit word-sum collisions.
-              * Two images with the same word-sum but different byte-sums are
-              * guaranteed to be different (e.g. odd-length buffers where the
-              * last byte is excluded from word-sum). */
-             uint16_t ck2 = 0;
-             for (int i = 0; i < pix_bytes; i++)
-                 ck2 = (uint16_t)(ck2 + pix_data[i]);
-            for (int di = 0; di < n_dedup; di++) {
-                if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
-                    dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
-                    dedup_table[di].ctrl == cp.ctrl &&
-                    dedup_table[di].sum2 == ck2) {
+              uint16_t ck = loadw_checksum(pix_data, pstride, rec->w, rec->h, &max_val);
+              /* Rotating XOR + byte-sum for collision disambiguation.
+               * Linear sums (word-sum and byte-sum) can cancel across differing
+               * bytes. Adding rotating XOR breaks the linearity. */
+              uint16_t ck2 = 0, ck3 = 0;
+              for (int i = 0; i < pix_bytes; i++) {
+                  ck2 = (uint16_t)(ck2 + pix_data[i]);
+                  ck3 = (uint16_t)((ck3 << 1) | (ck3 >> 15)) ^ pix_data[i];
+              }
+             for (int di = 0; di < n_dedup; di++) {
+                 if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
+                     dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
+                     dedup_table[di].ctrl == cp.ctrl &&
+                     dedup_table[di].sum2 == ck2 &&
+                     dedup_table[di].sum3 == ck3) {
                     dedup_idx = di; break;
                 }
             }
@@ -1960,11 +1962,13 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 uint16_t max_val;
                 dedup_table[n_dedup].sum = loadw_checksum(pix_data, pstride, rec->w, rec->h, &max_val);
                 dedup_table[n_dedup].max_val = max_val;
-                /* Compute byte-sum hash to match the lookup check */
-                uint16_t ck2 = 0;
-                for (int i = 0; i < pix_bytes; i++)
+                uint16_t ck2 = 0, ck3 = 0;
+                for (int i = 0; i < pix_bytes; i++) {
                     ck2 = (uint16_t)(ck2 + pix_data[i]);
+                    ck3 = (uint16_t)((ck3 << 1) | (ck3 >> 15)) ^ pix_data[i];
+                }
                 dedup_table[n_dedup].sum2 = ck2;
+                dedup_table[n_dedup].sum3 = ck3;
                 dedup_table[n_dedup].sizx = cp.sizx;
                 dedup_table[n_dedup].sizy = cp.sizy;
                 dedup_table[n_dedup].ctrl = cp.ctrl;
@@ -3007,7 +3011,7 @@ int main(int argc, char *argv[]) {
     if (argc < 2) { print_usage(NULL); return 1; }
 
     memset(&g, 0, sizeof(g));
-    g.dedup = 1;  /* CON> (checksums ON) by default, matching LOADW */
+    g.dedup = 1;  /* CON> (checksums ON) by default; /OLD mode disables below */
     g.pon = 1;
     g.build_raw = 1;
     g.build_tables = 0;
@@ -3069,6 +3073,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
+
+    /* /OLD: CON> off by default (LOADE behavior). /OLD2: ON (4.65 dedups). */
+    if (g.old_mode == 1) g.dedup = 0;
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
 
