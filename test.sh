@@ -27,9 +27,15 @@ test_lod() {
 
     PASS=0; FAIL=0
     for T in $TBL_LIST; do
+        # Try with .TBL extension first, then as-is (for .ASM/.GLO files)
         REF="$BASE/$REFDIR/$T.TBL"
-        if [ -f "$REF" ] && [ -f "$T.TBL" ]; then
-            if diff "$REF" "$T.TBL" >/dev/null 2>&1; then
+        OUTFILE="$T.TBL"
+        if [ ! -f "$REF" ]; then
+            REF="$BASE/$REFDIR/$T"
+            OUTFILE="$T"
+        fi
+        if [ -f "$REF" ] && [ -f "$OUTFILE" ]; then
+            if diff "$REF" "$OUTFILE" >/dev/null 2>&1; then
                 PASS=$((PASS + 1))
             else
                 FAIL=$((FAIL + 1))
@@ -38,10 +44,10 @@ test_lod() {
     done
 
     if [ $FAIL -eq 0 ]; then
-        echo "  PASS $LODNAME: $PASS/$((PASS+FAIL)) TBLs"
+        echo "  PASS $LODNAME: $PASS/$((PASS+FAIL)) files"
         ALL_PASS=$((ALL_PASS + 1))
     else
-        echo "  FAIL $LODNAME: $PASS/$((PASS+FAIL)) TBLs"
+        echo "  FAIL $LODNAME: $PASS/$((PASS+FAIL)) files"
         ALL_FAIL=$((ALL_FAIL + 1))
     fi
 }
@@ -67,7 +73,7 @@ test_lod workArt refArt BBMUG "PLYRHD3 PLYRHD5"
 test_lod workArt refArt BBVDA "BBVDA"
 
 # worktrog: Trog /OLD mode (LOADE.EXE)
-test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX" "/OLD"
+test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX IMGPAL.ASM IMGTBL.GLO IMGTBL.ASM BGNDTBL.ASM BGNDPAL.ASM BGNDTBL.GLO" "/OLD"
 
 # worknarc: Narc /OLD mode (LOADE.EXE, RLC encoding)
 test_lod worknarc refnarc NARC1 "NARC1IMG NARCBON NARCBUG NARCCAD NARCCHOP NARCDOG NARCDUMP NARCENT NARCGANG NARCHEAD NARCHOOK NARCHYPO NARCLAB NARCLOAF NARCLOWN NARCMBIG NARCMUGS NARCPIMP NARCPLAY NARCPORS NARCRAMB NARCTEXT" "/OLD"

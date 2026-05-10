@@ -1464,6 +1464,8 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
         static void write_global(const char *name) {
      fprintf(g.glo_fp, "\t.%s\t%s\r\n",
              strcmp(name, "ENDMARKER") == 0 ? "global" : "globl", name);
+     if (g.old_mode && strcmp(name, "ENDMARKER") != 0)
+         fprintf(g.glo_fp, "\r\n");
  }
 
 /* =========================================================================
@@ -1995,8 +1997,8 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
           if (g.build_tables && g.asm_fp)
               write_image_tbl(g.asm_fp, ie);
 
-          /* Only write .globl for ENDMARKER and special symbols, not every image */
-          if (g.glo_fp && strcmp(name, "ENDMARKER") == 0)
+          /* Write .globl for each image in /OLD mode; otherwise only ENDMARKER */
+          if (g.glo_fp && (g.old_mode || strcmp(name, "ENDMARKER") == 0))
              write_global(name);
     }
 }
@@ -3210,6 +3212,38 @@ int main(int argc, char *argv[]) {
                         fprintf(imgasm_fp, "\r\n");
                 }
                 fclose(imgasm_fp);
+            }
+        }
+        /* If IMGTBL.ASM was written via ASM> (need_write=0), insert GLO includes
+         * right after the header (.even line), not at the end. */
+        if (!need_write && g.n_glo_files > 0) {
+            FILE *imgasm_fp = fopen(imgasm_path, "r");
+            if (imgasm_fp) {
+                char buf[65536];
+                size_t len = fread(buf, 1, sizeof(buf), imgasm_fp);
+                fclose(imgasm_fp);
+                /* Find ".even" line and insert GLO includes after it */
+                char *even_pos = strstr(buf, ".even");
+                if (even_pos) {
+                    char *after_even = even_pos + 5; /* past ".even" */
+                    while (*after_even == '\r' || *after_even == '\n') after_even++;
+                    char suffix[4096];
+                    int slen = 0;
+                    for (int gi = 0; gi < g.n_glo_files; gi++) {
+                        slen += snprintf(suffix + slen, sizeof(suffix) - slen,
+                            "\r\n\t.include %s", g.glo_files[gi]);
+                    }
+                    slen += snprintf(suffix + slen, sizeof(suffix) - slen, "\r\n");
+                    size_t before_len = (size_t)(after_even - buf);
+                    size_t after_len = len - before_len;
+                    imgasm_fp = fopen(imgasm_path, "w");
+                    if (imgasm_fp) {
+                        fwrite(buf, 1, before_len, imgasm_fp);
+                        fwrite(suffix, 1, slen, imgasm_fp);
+                        fwrite(after_even, 1, after_len, imgasm_fp);
+                        fclose(imgasm_fp);
+                    }
+                }
             }
         }
     }
