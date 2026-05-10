@@ -3200,8 +3200,10 @@ int main(int argc, char *argv[]) {
                     fprintf(imgasm_fp, "\r\n");
                     fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
                     fprintf(imgasm_fp, "\t.DATA\r\n");
-                    fprintf(imgasm_fp, "\t.even\r\n\r\n");
+                    fprintf(imgasm_fp, "\t.even\r\n");
                 }
+                if (g.n_glo_files > 0)
+                    fprintf(imgasm_fp, "\r\n");
                 for (int gi = 0; gi < g.n_glo_files; gi++) {
                     fprintf(imgasm_fp, "\t.include %s\r\n", g.glo_files[gi]);
                     if (gi < g.n_glo_files - 1)
