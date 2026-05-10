@@ -1254,7 +1254,16 @@ static uint32_t encode_scaled(ImgFile *img, IMG_REC *rec, int bpp, int denom) {
  * ========================================================================= */
 
 static void write_tbl_header(FILE *fp) {
-    fprintf(fp, "\t.DATA\r\n");
+    if (g.old_mode) {
+        fprintf(fp, "\t.FILE 'imgtbl.asm'\r\n");
+        fprintf(fp, "\t.OPTION B,D,L,T\r\n");
+        fprintf(fp, "\r\n");
+        fprintf(fp, "\t.include imgtbl.glo\r\n");
+        fprintf(fp, "\t.DATA\r\n");
+        fprintf(fp, "\t.even\r\n");
+    } else {
+        fprintf(fp, "\t.DATA\r\n");
+    }
 }
 
 static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual_idx) {
@@ -1374,38 +1383,43 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                     int dbank = g.base_addr >= 0x2000000 ? (int)((g.base_addr - 0x2000000) / 0x4000000) : 0;
                     base += (uint32_t)dbank * 0x2000000;
                 }
-                /* /OLD mode: check if PAL:L immediately follows SAG:L */
+                /* Check if PAL:L immediately follows (combine for normal, separate for /OLD) */
                 int next_is_pal = 0;
-                if (g.old_mode) {
-                    for (int ni = i + 1; ni < g.n_ihdr; ni++) {
-                        int nf = g.ihdr[ni].field;
-                        if (nf == IHDR_PAL && !g.pon) continue;
-                        if (nf == IHDR_PAL && g.ihdr[ni].size == SZ_L) next_is_pal = 1;
-                        break;
-                    }
+                for (int ni = i + 1; ni < g.n_ihdr; ni++) {
+                    int nf = g.ihdr[ni].field;
+                    if (nf == IHDR_PAL && !g.pon) continue;
+                    if (nf == IHDR_PAL && g.ihdr[ni].size == SZ_L) next_is_pal = 1;
+                    break;
                 }
-                if (next_is_pal) {
-                    if (have_pal) {
-                        if (ie->sag_is_cached)
+                if (next_is_pal && g.old_mode) {
+                    /* /OLD: SAG and PAL on separate .long lines */
+                    if (ie->sag_is_cached)
+                        fprintf(fp, "0%xH\r\n", ie->sag);
+                    else
+                        fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
+                } else if (next_is_pal) {
+                    /* Normal: SAG and PAL combined on one line */
+                    if (ie->sag_is_cached) {
+                        if (have_pal)
                             fprintf(fp, "0%xH,%s\r\n", ie->sag, ie->pal_name);
                         else
-                            fprintf(fp, "0%xH,%s\r\n", base + (ie->sag - section_base_bit), ie->pal_name);
-                    } else {
-                        if (ie->sag_is_cached)
                             fprintf(fp, "0%xH,-1\r\n", ie->sag);
+                    } else {
+                        if (have_pal)
+                            fprintf(fp, "0%xH,%s\r\n", base + (ie->sag - section_base_bit), ie->pal_name);
                         else
                             fprintf(fp, "0%xH,-1\r\n", base + (ie->sag - section_base_bit));
                     }
-                    /* Skip the PAL field in the main loop */
+                    /* Skip PAL field after combining */
                     for (int ni = i + 1; ni < g.n_ihdr; ni++) {
-                        int nf = g.ihdr[ni].field;
-                        if (nf == IHDR_PAL) { i = ni; break; }
+                        if (g.ihdr[ni].field == IHDR_PAL) { i = ni; break; }
                     }
-            } else {
-                if (ie->sag_is_cached)
-                    fprintf(fp, "0%xH\r\n", ie->sag);
-                else
-                    fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
+                } else {
+                    /* SAG only (no PAL after it) */
+                    if (ie->sag_is_cached)
+                        fprintf(fp, "0%xH\r\n", ie->sag);
+                    else
+                        fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
                 }
             } else if (f == IHDR_PAL) {
                 if (have_pal)
