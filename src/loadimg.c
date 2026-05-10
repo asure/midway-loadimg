@@ -1818,10 +1818,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                   if (entry_off + PTTBL_HDR_SIZE <= file_size)
                       ie->pttbl = &cur->imgfile->pttbls[rec->pttblnum];
               }
-              /* LOADW accesses pttbls[pttblnum-2] and pttbls[pttblnum-3] unconditionally
-               * (no >= 2 / >= 3 guard), so pttblnum=0,1 reach into the palette data area
-               * before pttbls[0]. Match this behavior: use signed arithmetic to allow
-               * negative offsets as long as the result stays within the file buffer. */
+              /* LOADW accesses pttbls[pttblnum-2] and pttbls[pttblnum-3] unconditionally */
               {
                   ptrdiff_t pttbls_off = (uint8_t*)cur->imgfile->pttbls - cur->imgfile->data;
                   ptrdiff_t sh_off  = pttbls_off + (ptrdiff_t)(rec->pttblnum - 2) * (ptrdiff_t)sizeof(PTTBL);
@@ -1830,6 +1827,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       ie->pttbl_shared = (PTTBL*)(cur->imgfile->data + sh_off);
                   if (pt0_off >= 0 && pt0_off + PTTBL_HDR_SIZE <= (ptrdiff_t)file_size)
                       ie->pttbl_pt0x = (PTTBL*)(cur->imgfile->data + pt0_off);
+
               }
               if (!ie->pttbl_pt0x) ie->pttbl_pt0x = ie->pttbl_shared ? ie->pttbl_shared : ie->pttbl;
           }

@@ -445,6 +445,20 @@ done
 
 ---
 
+## PT0X Sentinel Value
+
+BB5 PLYRDSEQ and BB6 PLYRDSQ2 have cosmetic PT0X differences (6 and 2
+entries respectively). The reference uses `-16384` or `0` as sentinel for
+"shared entry 3-back falls in palette data area". Our tool uses `-32768`
+(the g.ite_pttbl sentinel). Both sentinels resolve to "use own entry's
+fields" in the IT.EXE toolchain but differ numerically.
+
+To fix: the PT0X handler in `get_ihdr_word_value()` needs its fallback
+logic adjusted. When the shared entry (pttblnum-3) reads from outside
+valid PTTBL data (palette area), the sentinel should be `-16384` for IT
+mode and `0` for non-IT mode. Currently our tool uses `-32768` for IT
+mode and cbox-computed `0` for non-IT mode when cbox is all-zeros.
+
 ## Remaining Investigation Questions
 
 1. **Where does BB5 first diverge?** Find the first CMP=1 image in BB5
