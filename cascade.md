@@ -448,16 +448,20 @@ done
 ## PT0X Sentinel Value
 
 BB5 PLYRDSEQ and BB6 PLYRDSQ2 have cosmetic PT0X differences (6 and 2
-entries respectively). The reference uses `-16384` or `0` as sentinel for
-"shared entry 3-back falls in palette data area". Our tool uses `-32768`
-(the g.ite_pttbl sentinel). Both sentinels resolve to "use own entry's
-fields" in the IT.EXE toolchain but differ numerically.
+entries respectively). The reference uses a 3-way split (`-32768`, `-16384`,
+`0`) for different pttblnum ranges within NBA_DNK2.IMG. Our tool outputs
+`-32768` for all IT.EXE-mode entries.
 
-To fix: the PT0X handler in `get_ihdr_word_value()` needs its fallback
-logic adjusted. When the shared entry (pttblnum-3) reads from outside
-valid PTTBL data (palette area), the sentinel should be `-16384` for IT
-mode and `0` for non-IT mode. Currently our tool uses `-32768` for IT
-mode and cbox-computed `0` for non-IT mode when cbox is all-zeros.
+The root cause: `g.ite_pttbl` heuristic fires for NBA_DNK2 (seqcnt=2,
+scrcnt=1, palcnt=4, std_bad=3, it_bad=0 → ite_pttbl=1). But LOADW's
+reference output shows a mix of PT0X values, not all `-32768`.
+
+Full-file PTTBL scans at every byte offset found no base where the three
+reference PT0X values co-exist from cbox computation. The reference may
+use a different PTTBL stride, different struct layout, or different cbox
+field offset than our 40-byte `sizeof(PTTBL)`.
+
+See `sentinel.md` for the full investigation log and untried hypotheses.
 
 ## Remaining Investigation Questions
 
