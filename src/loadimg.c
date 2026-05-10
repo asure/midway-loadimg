@@ -2176,11 +2176,16 @@ static void process_lod(const char *lod_path) {
                 else strncpy(full, fname, MAX_PATH-1);
                 g.glo_fp = fopen(full, "a");
                 if (!g.glo_fp) die("cannot create %s", full);
-                /* Track GLO filename for IMGTBL.ASM generation */
+                /* Track GLO filename for IMGTBL.ASM generation (deduplicate) */
                 if (g.n_glo_files < 64) {
-                    strncpy(g.glo_files[g.n_glo_files], fname, 63);
-                    g.glo_files[g.n_glo_files][63] = 0;
-                    g.n_glo_files++;
+                    int dup = 0;
+                    for (int gi = 0; gi < g.n_glo_files; gi++)
+                        if (strcmp(g.glo_files[gi], fname) == 0) { dup = 1; break; }
+                    if (!dup) {
+                        strncpy(g.glo_files[g.n_glo_files], fname, 63);
+                        g.glo_files[g.n_glo_files][63] = 0;
+                        g.n_glo_files++;
+                    }
                 }
             }
         }
@@ -2719,9 +2724,16 @@ static void process_lod(const char *lod_path) {
                     uint16_t ctrl = (uint16_t)(((img_bpp[di] == 8 ? 0 : img_bpp[di]) << 12) | (img_tm[di] << 10) |
                                                 (img_lm[di] << 8) | (img_cmp[di] ? 0x80 : 0));
                     static int first_bgnd = 1;
-                    fprintf(g.bgnd_fp, "\t.word\t%d,%d%s\r\n", w, h, first_bgnd ? "\t;x size, y size" : "");
-                    fprintf(g.bgnd_fp, "\t.long\t0%XH%s\r\n", g.base_addr + img_sags[di], first_bgnd ? "\t;address" : "");
-                    fprintf(g.bgnd_fp, "\t.word\t0%XH%s\r\n", ctrl, first_bgnd ? "\t;dma ctrl" : "");
+                    int bgw = g.old_mode ? w : w;  /* no change, just for context */
+                    const char *ww = g.old_mode ? "\t.word   " : "\t.word\t";
+                    const char *lw = g.old_mode ? "\t.long   " : "\t.long\t";
+                    fprintf(g.bgnd_fp, "%s%d,%d%s\r\n", ww, w, h, first_bgnd ? "\t;x size, y size" : "");
+                    if (g.old_mode)
+                        fprintf(g.bgnd_fp, "%s0%xH%s\r\n", lw, g.base_addr + img_sags[di], first_bgnd ? "\t;address" : "");
+                    else
+                        fprintf(g.bgnd_fp, "%s0%XH%s\r\n", lw, g.base_addr + img_sags[di], first_bgnd ? "\t;address" : "");
+                    if (!g.old_mode)
+                        fprintf(g.bgnd_fp, "%s0%XH%s\r\n", ww, ctrl, first_bgnd ? "\t;dma ctrl" : "");
                     first_bgnd = 0;
                 }
             }
@@ -2887,10 +2899,16 @@ static void process_lod(const char *lod_path) {
                             { already_written = 1; break; }
                     if (already_written) continue;
                     fprintf(g.bgndpal_fp, "%s:\t;PAL #%d\r\n", pals[pi].name, pi);
-                    fprintf(g.bgndpal_fp, "\t.word\t%d\t;pal size\r\n", pals[pi].cnt);
+                    if (g.old_mode)
+                        fprintf(g.bgndpal_fp, "\t.word   %d\t;pal size\r\n", pals[pi].cnt);
+                    else
+                        fprintf(g.bgndpal_fp, "\t.word\t%d\t;pal size\r\n", pals[pi].cnt);
                     fputs("\t.word ", g.bgndpal_fp);
                     for (int ci = 0; ci < pals[pi].cnt; ci++) {
-                        fprintf(g.bgndpal_fp, "%04XH", pals[pi].colors[ci]);
+                        if (g.old_mode)
+                            fprintf(g.bgndpal_fp, "%04xH", pals[pi].colors[ci]);
+                        else
+                            fprintf(g.bgndpal_fp, "%04XH", pals[pi].colors[ci]);
                         if (ci < pals[pi].cnt - 1) fputc(',', g.bgndpal_fp);
                     }
                     fputs("\r\n\r\n", g.bgndpal_fp);
