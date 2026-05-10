@@ -94,7 +94,7 @@ typedef struct {
 /* IMG files always use 4-byte aligned row stride */
 #define IMG_STRIDE(w) (((w) + 3) & ~3)
 /* Output stride: follows /P flag (padded if set, raw otherwise), minimum 3 */
-#define OUT_STRIDE(w) (g.pad4bits ? (((w) + 3) & ~3) : ((w) > 2 ? (w) : 3))
+#define OUT_STRIDE(w) (g.pad4bits ? (((w) + 3) & ~3) : (g.old_mode ? ((w) > 0 ? (w) : 1) : ((w) > 2 ? (w) : 3)))
 
 typedef struct {
     char     name[MAX_NAME];
@@ -1254,16 +1254,7 @@ static uint32_t encode_scaled(ImgFile *img, IMG_REC *rec, int bpp, int denom) {
  * ========================================================================= */
 
 static void write_tbl_header(FILE *fp) {
-    if (g.old_mode) {
-        fprintf(fp, "\t.FILE 'imgtbl.asm'\r\n");
-        fprintf(fp, "\t.OPTION B,D,L,T\r\n");
-        fprintf(fp, "\r\n");
-        fprintf(fp, "\t.include imgtbl.glo\r\n");
-        fprintf(fp, "\t.DATA\r\n");
-        fprintf(fp, "\t.even\r\n");
-    } else {
-        fprintf(fp, "\t.DATA\r\n");
-    }
+    fprintf(fp, "\t.DATA\r\n");
 }
 
 static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual_idx) {
@@ -2140,8 +2131,24 @@ static void process_lod(const char *lod_path) {
                      if (!g.asm_fp) die("cannot create %s", full);
                      strncpy(g.asm_path, full, MAX_PATH-1);
                      fseek(g.asm_fp, 0, SEEK_END);
-                     if (ftell(g.asm_fp) == 0)
-                         write_tbl_header(g.asm_fp);
+                      if (ftell(g.asm_fp) == 0) {
+                          if (g.old_mode) {
+                              char *fn = basename_p(full);
+                              int is_main = (strstr(fn, "IMGTBL") != NULL);
+                              if (is_main) {
+                                  fprintf(g.asm_fp, "\t.FILE 'imgtbl.asm'\r\n");
+                                  fprintf(g.asm_fp, "\t.OPTION B,D,L,T\r\n");
+                                  fprintf(g.asm_fp, "\r\n");
+                                  fprintf(g.asm_fp, "\t.include imgtbl.glo\r\n");
+                                  fprintf(g.asm_fp, "\t.DATA\r\n");
+                                  fprintf(g.asm_fp, "\t.even\r\n");
+                              } else {
+                                  write_tbl_header(g.asm_fp);
+                              }
+                          } else {
+                              write_tbl_header(g.asm_fp);
+                          }
+                      }
                      /* Track file for final .TEXT write */
                      if (g.n_tbl_files < 32) {
                          int found = 0;
@@ -2498,26 +2505,28 @@ static void process_lod(const char *lod_path) {
                       img_written[di] = 1;
                       img_sags[di] = g.irw_bit;
 
-                       int per_bpp;
-                       if (g.ppp > 0) {
-                           per_bpp = g.ppp;
-                       } else {
-                           uint32_t maxpx = 0;
-                           if (pix && w > 0 && h > 0)
-                               for (int pi = 0; pi < w * h; pi++)
-                                   if (pix[pi] > maxpx) maxpx = pix[pi];
-                           per_bpp = bpp_for_max(maxpx);
-                           if (per_bpp < 1 || per_bpp > 8) per_bpp = 4;
-                       }
-                      /* Increase bpp if unique colors exceed capacity */
-                      if (pix && w > 0 && h > 0) {
-                          uint8_t seen[256] = {0};
-                          int nunique = 0;
-                          for (int pi = 0; pi < w * h; pi++) {
-                              if (!seen[pix[pi]]) { seen[pix[pi]] = 1; nunique++; }
-                          }
-                          while (nunique > (1 << per_bpp) && per_bpp < 8) per_bpp++;
-                     }
+                        int per_bpp;
+                        if (g.ppp > 0) {
+                            per_bpp = g.ppp;
+                        } else if (g.old_mode) {
+                            per_bpp = 8;  /* /OLD: LOAD.EXE always outputs 8bpp */
+                        } else {
+                            uint32_t maxpx = 0;
+                            if (pix && w > 0 && h > 0)
+                                for (int pi = 0; pi < w * h; pi++)
+                                    if (pix[pi] > maxpx) maxpx = pix[pi];
+                            per_bpp = bpp_for_max(maxpx);
+                            if (per_bpp < 1 || per_bpp > 8) per_bpp = 4;
+                        }
+                       /* Increase bpp if unique colors exceed capacity */
+                       if (!g.old_mode && pix && w > 0 && h > 0) {
+                           uint8_t seen[256] = {0};
+                           int nunique = 0;
+                           for (int pi = 0; pi < w * h; pi++) {
+                               if (!seen[pix[pi]]) { seen[pix[pi]] = 1; nunique++; }
+                           }
+                           while (nunique > (1 << per_bpp) && per_bpp < 8) per_bpp++;
+                      }
 
                     int best_lm = 0, best_tm = 0, do_cmp = 0;
                     int lmm = 1, tmm = 1;
@@ -2554,17 +2563,17 @@ static void process_lod(const char *lod_path) {
 
                         /* Per-image CMP decision */
                         lmm = 1 << best_lm; tmm = 1 << best_tm;
-                        int64_t comp_bits = 0, raw_bits = (int64_t)h * w * per_bpp;
+                        int64_t comp_bits = 0, raw_bits = (int64_t)h * sizx_a * per_bpp;
                             for (int row = 0; row < h; row++) {
                                 uint8_t *rp = pix + row * w;
                                  int lead = 0, trail = 0, lead_done2 = 0;
-                                 for (int x = 0; x < w; x++) {
-                                     uint8_t px2 = rp[x];
+                                 for (int x = 0; x < sizx_a; x++) {
+                                     uint8_t px2 = (x < w) ? rp[x] : 0;
                                      if (!lead_done2) {
                                          if (lead == 120) { lead_done2 = 1; }
                                          else if (px2 == 0) { lead++; }
                                          else { lead_done2 = 1; }
-                                     } else if (w - 120 < x) {
+                                     } else if (sizx_a - 120 < x) {
                                          if (px2 == 0) trail++;
                                          else trail = 0;
                                      }
@@ -2572,11 +2581,11 @@ static void process_lod(const char *lod_path) {
                                  int ln = lead / lmm; if (ln > 15) ln = 15;
                              int tn = trail / tmm; if (tn > 15) tn = 15;
                             int lc = ln * lmm, tc = tn * tmm;
-                            if (lc + tc > w) tc = w - lc;
-                            int stored = w - lc - tc;
+                            if (lc + tc > sizx_a) tc = sizx_a - lc;
+                            int stored = sizx_a - lc - tc;
                             if (stored < 0) stored = 0;
                             if (stored < 10) {
-                                int i6 = lc, i7 = w - tc - 1;
+                                int i6 = lc, i7 = sizx_a - tc - 1;
                                 if ((i7 - i6) + 1 < 10) {
                                     int l2c = (i6 - i7) + 9, i9 = l2c;
                                     if (i6 < l2c) { i9 = l2c - i6; l2c = i6; }
@@ -2584,8 +2593,8 @@ static void process_lod(const char *lod_path) {
                                     if (((i7 - (lc - l2c)) + 1) < 10)
                                         tn = tmm > 0 ? (tc - i9) / tmm : 0;
                                     lc = ln * lmm; tc = tn * tmm;
-                                    if (lc + tc > w) tc = w - lc;
-                                    stored = w - lc - tc;
+                                    if (lc + tc > sizx_a) tc = sizx_a - lc;
+                                    stored = sizx_a - lc - tc;
                                     if (stored < 0) stored = 0;
                                 }
                             }
@@ -3158,17 +3167,34 @@ int main(int argc, char *argv[]) {
         if (g.asm_path[0]) {
             char up_asm[64]; strncpy(up_asm, g.asm_path, 63); upcase(up_asm);
             char up_img[64]; strncpy(up_img, "IMGTBL.ASM", 63); upcase(up_img);
-            if (strstr(up_asm, up_img)) need_write = 0;
+            if (strstr(up_asm, up_img)) {
+                if (g.old_mode) {
+                    /* /OLD: IMGTBL.ASM was written via ASM> directives. The final
+                     * header wrapper is not needed (data already appended). */
+                    need_write = 0;
+                } else {
+                    need_write = 0;
+                }
+            }
         }
         if (need_write) {
             FILE *imgasm_fp = fopen(imgasm_path, "w");
             if (imgasm_fp) {
-                fprintf(imgasm_fp, "\t.FILE \"imgtbl.asm\"\r\n");
-                fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
-                fprintf(imgasm_fp, "\r\n");
-                fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
-                fprintf(imgasm_fp, "\t.DATA\r\n");
-                fprintf(imgasm_fp, "\t.even\r\n\r\n");
+                if (g.old_mode) {
+                    fprintf(imgasm_fp, "\t.FILE 'imgtbl.asm'\r\n");
+                    fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
+                    fprintf(imgasm_fp, "\r\n");
+                    fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
+                    fprintf(imgasm_fp, "\t.DATA\r\n");
+                    fprintf(imgasm_fp, "\t.even\r\n");
+                } else {
+                    fprintf(imgasm_fp, "\t.FILE \"imgtbl.asm\"\r\n");
+                    fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
+                    fprintf(imgasm_fp, "\r\n");
+                    fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
+                    fprintf(imgasm_fp, "\t.DATA\r\n");
+                    fprintf(imgasm_fp, "\t.even\r\n\r\n");
+                }
                 for (int gi = 0; gi < g.n_glo_files; gi++) {
                     fprintf(imgasm_fp, "\t.include %s\r\n", g.glo_files[gi]);
                     if (gi < g.n_glo_files - 1)

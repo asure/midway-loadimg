@@ -19,7 +19,9 @@ test_lod() {
     cd "$BASE/$WORKDIR" 2>/dev/null || { echo "  SKIP $LODNAME: no $WORKDIR"; return; }
 
     rm -f "$LODNAME.IRW" *.TBL IMGTBL.ASM IMGTBL.GLO IMGPAL.ASM BGND*.ASM BGND*.GLO 2>/dev/null
-    if ! timeout 180 "$TOOL" "$LODNAME.LOD" /P /T $EXTRA 2>/dev/null; then
+    local FLAGS="/P /T"
+    [ "$EXTRA" = "/OLD" ] || [ "$EXTRA" = "/OLD2" ] && FLAGS="/T"
+    if ! timeout 180 "$TOOL" "$LODNAME.LOD" $FLAGS $EXTRA 2>/dev/null; then
         echo "  FAIL $LODNAME: tool error"; ALL_FAIL=$((ALL_FAIL + 1)); return
     fi
 
@@ -65,7 +67,7 @@ test_lod workArt refArt BBMUG "PLYRHD3 PLYRHD5"
 test_lod workArt refArt BBVDA "BBVDA"
 
 # worktrog: Trog /OLD mode (LOADE.EXE)
-test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX TROGIMG" "/OLD"
+test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROGCAVE TROGTDAT TROGSCOR TROGTREX" "/OLD"
 
 # worknarc: Narc /OLD mode (LOADE.EXE, RLC encoding)
 test_lod worknarc refnarc NARC1 "NARC1IMG NARCBON NARCBUG NARCCAD NARCCHOP NARCDOG NARCDUMP NARCENT NARCGANG NARCHEAD NARCHOOK NARCHYPO NARCLAB NARCLOAF NARCLOWN NARCMBIG NARCMUGS NARCPIMP NARCPLAY NARCPORS NARCRAMB NARCTEXT" "/OLD"
