@@ -222,6 +222,7 @@ typedef struct {
     int      n_scales;
     uint32_t checksum;
     int      sag_is_cached;
+    int      ite_pttbl;
 } ImageEntry;
 
 typedef struct {
@@ -683,7 +684,7 @@ static ImgFile* img_load(const char *path) {
                     if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
                         it_bad++;
                 }
-                if (it_bad < std_bad) { pttbl_ofs = p; g.ite_pttbl = 1; }
+                if (it_bad < std_bad) { pttbl_ofs = p; g.ite_pttbl = 1; img->ite_pttbl = 1; }
             }
         }
     }
@@ -1325,7 +1326,7 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     /* PT IHDR fields: LOADW tries shared PTTBL header fields first, then own entry's
      * box[0]/box[1] fields as fallback (when header fields are all zero).
      * When g.ite_pttbl is set, use own entry fields per IT.EXE (itimg.asm:2338-2351). */
-     case IHDR_PT0X: { PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
+     case IHDR_PT0X: { if (ie->ite_pttbl) { if (!ie->pttbl) return -1; return (int16_t)ie->pttbl->x1; } PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
     case IHDR_PT2X: {
         if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->X;
         if (ie->pttbl_shared && ie->pttbl_shared->x2) return (int)ie->pttbl_shared->x2;
@@ -1859,6 +1860,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       ie->pttbl_pt0x = (PTTBL*)(cur->imgfile->data + pt0_off);
               }
               if (!ie->pttbl_pt0x) ie->pttbl_pt0x = ie->pttbl_shared ? ie->pttbl_shared : ie->pttbl;
+              ie->ite_pttbl = cur->imgfile->ite_pttbl;
           }
         if (ie->pttbl) {
             PTTBL *pt = ie->pttbl;
