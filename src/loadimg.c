@@ -270,6 +270,7 @@ typedef struct {
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
     int      old_mode;   /* 1=/OLD (LOAD.EXE 4.50), 2=/OLD2 (LOAD.EXE 4.65): legacy output */
     int      intel_hex;  /* 1 if /H: output Intel hex (0XXXXH) instead of Motorola (>XXXX) */
+    int      sagpal_combined; /* 1: SAG,PAL on one .long line (NARC), 0: separate lines (Trog) */
     int      rlc;        /* 1 if RLC> active: 2bpp run-length encoding */
 
     char     imgdir[MAX_PATH];
@@ -1302,10 +1303,8 @@ static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual
     if (g.pal_fp)
         fprintf(g.pal_fp, "\r\n");
 
-    if (g.main_glo_fp) {
+    if (g.main_glo_fp)
         fprintf(g.main_glo_fp, "\t.globl\t%s\r\n", pe->name);
-        if (g.old_mode) fprintf(g.main_glo_fp, "\r\n");
-    }
 }
 
 /* Get the value for an IHDR field for a given scale */
@@ -1397,15 +1396,15 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                 }
                 const char *hx = g.old_mode && !g.intel_hex ? ">%X" : (g.intel_hex ? "0%XH" : "0%xH");
                 const char *hx_comma = g.old_mode && !g.intel_hex ? ">%X," : (g.intel_hex ? "0%XH," : "0%xH,");
-                if (next_is_pal && g.old_mode) {
-                    /* /OLD: SAG and PAL on separate .long lines */
+                if (next_is_pal && g.old_mode && !g.sagpal_combined) {
+                    /* /OLD: SAG and PAL on separate .long lines (Trog style) */
                     if (ie->sag_is_cached)
                         fprintf(fp, hx, ie->sag);
                     else
                         fprintf(fp, hx, base + (ie->sag - section_base_bit));
                     fprintf(fp, "\r\n");
                 } else if (next_is_pal) {
-                    /* Normal: SAG and PAL combined on one line */
+                    /* Combined: SAG and PAL on one line (normal mode or NARC /OLD) */
                     if (ie->sag_is_cached) {
                         if (have_pal)
                             fprintf(fp, hx_comma, ie->sag);
@@ -1486,8 +1485,6 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
      if (!fp) return;
      fprintf(fp, "\t.%s\t%s\r\n",
              strcmp(name, "ENDMARKER") == 0 ? "global" : "globl", name);
-     if (g.old_mode && strcmp(name, "ENDMARKER") != 0)
-         fprintf(fp, "\r\n");
  }
 
 /* =========================================================================
@@ -2064,6 +2061,9 @@ static void scan_bpp(const char *lod_path) {
             if (cur.imgfile) { free(cur.imgfile->norm_images); free(cur.imgfile->data); free(cur.imgfile); }
             cur.imgfile = img_load_try(imgdir, fname);
         }
+        else if (!strncmp(upper, "POF>", 4)) {
+            g.sagpal_combined = 0; /* POF> present: Trog-style separate SAG+PAL */
+        }
         else if (!strncmp(upper, "--->", 4) && cur.imgfile) {
             const char *s = line + 5;
             while (*s) {
@@ -2360,7 +2360,6 @@ static void process_lod(const char *lod_path) {
             }
              if (g.bgndtbl_glo_fp) {
                 fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sPALS\r\n", hdr_suffix);
-                if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
             }
 
 #define MAX_GLOBJ 4096
@@ -2754,16 +2753,13 @@ static void process_lod(const char *lod_path) {
                     uint16_t ctrl = (uint16_t)(((img_bpp[di] == 8 ? 0 : img_bpp[di]) << 12) | (img_tm[di] << 10) |
                                                 (img_lm[di] << 8) | (img_cmp[di] ? 0x80 : 0));
                     static int first_bgnd = 1;
-                    int bgw = g.old_mode ? w : w;  /* no change, just for context */
-                    const char *ww = g.old_mode ? "\t.word   " : "\t.word\t";
-                    const char *lw = g.old_mode ? "\t.long   " : "\t.long\t";
-                    fprintf(g.bgnd_fp, "%s%d,%d%s\r\n", ww, w, h, first_bgnd ? "\t;x size, y size" : "");
-                    if (g.old_mode)
-                        fprintf(g.bgnd_fp, "%s0%xH%s\r\n", lw, g.base_addr + img_sags[di], first_bgnd ? "\t;address" : "");
-                    else
-                        fprintf(g.bgnd_fp, "%s0%XH%s\r\n", lw, g.base_addr + img_sags[di], first_bgnd ? "\t;address" : "");
+                    const char *hx = g.old_mode && !g.intel_hex ? ">%X" : "0%XH";
+                    fprintf(g.bgnd_fp, "\t.word\t%d,%d%s\r\n", w, h, first_bgnd ? "\t;x size, y size" : "");
+                    fprintf(g.bgnd_fp, "\t.long\t");
+                    fprintf(g.bgnd_fp, hx, g.base_addr + img_sags[di]);
+                    fprintf(g.bgnd_fp, "%s\r\n", first_bgnd ? "\t;address" : "");
                     if (!g.old_mode)
-                        fprintf(g.bgnd_fp, "%s0%XH%s\r\n", ww, ctrl, first_bgnd ? "\t;dma ctrl" : "");
+                        fprintf(g.bgnd_fp, "\t.word\t0%XH%s\r\n", ctrl, first_bgnd ? "\t;dma ctrl" : "");
                     first_bgnd = 0;
                 }
             }
@@ -2845,33 +2841,31 @@ static void process_lod(const char *lod_path) {
                          blk_objs[n_blk].ii = hdr_idx;
                          n_blk++;
                      }
-                      /* Output in BDB file order (no sorting) */
-                       const char *bw = g.old_mode ? "\t.word   " : "\t.word\t";
-                       const char *bl = g.old_mode ? "\t.long   " : "\t.long\t";
-                       for (int bi = 0; bi < n_blk; bi++) {
-                            if (bi == 0) {
-                                if (g.old_mode)
-                                    fprintf(g.bgnd_fp, "%s0%xH\t;flags\r\n", bw, blk_objs[bi].wx);
-                               else
-                                   fprintf(g.bgnd_fp, "%s0%XH\t;flags\r\n", bw, blk_objs[bi].wx);
-                               fprintf(g.bgnd_fp, "%s%d,%d ;x,y\r\n", bw, blk_objs[bi].x, blk_objs[bi].y);
-                               if (g.old_mode)
-                                   fprintf(g.bgnd_fp, "%s0%xH\t;pal5,pal4,hdr13-0\r\n", bw, blk_objs[bi].ii);
-                               else
-                                   fprintf(g.bgnd_fp, "%s0%XH\t;pal5,pal4,hdr13-0\r\n", bw, blk_objs[bi].ii);
-                           } else {
-                               if (g.old_mode)
-                                   fprintf(g.bgnd_fp, "%s0%xH,%d,%d,0%xH\r\n", bw,
-                                           blk_objs[bi].wx, blk_objs[bi].x, blk_objs[bi].y, blk_objs[bi].ii);
-                               else
-                                   fprintf(g.bgnd_fp, "%s0%XH,%d,%d,0%XH\r\n", bw,
-                                           blk_objs[bi].wx, blk_objs[bi].x, blk_objs[bi].y, blk_objs[bi].ii);
-                          }
-                      }
-                      if (g.old_mode)
-                          fprintf(g.bgnd_fp, "%s0ffffH\t;End Marker\r\n", bw);
-                      else
-                          fprintf(g.bgnd_fp, "%s0FFFFH\t;End Marker\r\n", bw);
+                       /* Output in BDB file order (no sorting) */
+                        const char *hx2 = g.old_mode && !g.intel_hex ? ">%X" : "0%XH";
+                        for (int bi = 0; bi < n_blk; bi++) {
+                             if (bi == 0) {
+                                fprintf(g.bgnd_fp, "\t.word\t");
+                                fprintf(g.bgnd_fp, hx2, blk_objs[bi].wx);
+                                fprintf(g.bgnd_fp, "\t;flags\r\n");
+                                fprintf(g.bgnd_fp, "\t.word\t%d,%d ;x,y\r\n", blk_objs[bi].x, blk_objs[bi].y);
+                                fprintf(g.bgnd_fp, "\t.word\t");
+                                fprintf(g.bgnd_fp, hx2, blk_objs[bi].ii);
+                                fprintf(g.bgnd_fp, "\t;pal5,pal4,hdr13-0\r\n");
+                            } else {
+                                fprintf(g.bgnd_fp, "\t.word\t");
+                                fprintf(g.bgnd_fp, hx2, blk_objs[bi].wx);
+                                fprintf(g.bgnd_fp, ",%d,%d,", blk_objs[bi].x, blk_objs[bi].y);
+                                fprintf(g.bgnd_fp, hx2, blk_objs[bi].ii);
+                                fprintf(g.bgnd_fp, "\r\n");
+                           }
+                       }
+                       fprintf(g.bgnd_fp, "\t.word\t");
+                       if (g.old_mode && !g.intel_hex)
+                           fputs(">FFFF", g.bgnd_fp);
+                       else
+                           fputs("0FFFFH", g.bgnd_fp);
+                       fprintf(g.bgnd_fp, "\t;End Marker\r\n");
                  }
              }
 
@@ -2934,14 +2928,10 @@ static void process_lod(const char *lod_path) {
                 }
             }
             if (g.bgndtbl_glo_fp) {
-                for (int pi = 0; pi < np; pi++) {
+                for (int pi = 0; pi < np; pi++)
                     fprintf(g.bgndtbl_glo_fp, "\t.globl\t%s\r\n", pals[pi].name);
-                    if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
-                }
-                for (int bi = 0; bi < n_bmod; bi++) {
+                for (int bi = 0; bi < n_bmod; bi++)
                     fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sBMOD\r\n", bmod_list[bi]);
-                    if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
-                }
             }
 
             if (g.bgndpal_fp)
@@ -2953,19 +2943,11 @@ static void process_lod(const char *lod_path) {
                             { already_written = 1; break; }
                     if (already_written) continue;
                     fprintf(g.bgndpal_fp, "%s:\t;PAL #%d\r\n", pals[pi].name, pi);
-                    if (g.old_mode)
-                        fprintf(g.bgndpal_fp, "\t.word   %d\t;pal size\r\n", pals[pi].cnt);
-                    else
-                        fprintf(g.bgndpal_fp, "\t.word\t%d\t;pal size\r\n", pals[pi].cnt);
-                    if (g.old_mode)
-                        fputs("\t.word  ", g.bgndpal_fp);
-                    else
-                        fputs("\t.word ", g.bgndpal_fp);
+                    fprintf(g.bgndpal_fp, "\t.word\t%d\t;pal size\r\n", pals[pi].cnt);
+                    fputs("\t.word\t", g.bgndpal_fp);
+                    const char *hx3 = g.old_mode && !g.intel_hex ? ">%X" : "%04XH";
                     for (int ci = 0; ci < pals[pi].cnt; ci++) {
-                        if (g.old_mode)
-                            fprintf(g.bgndpal_fp, "%04xH", pals[pi].colors[ci]);
-                        else
-                            fprintf(g.bgndpal_fp, "%04XH", pals[pi].colors[ci]);
+                        fprintf(g.bgndpal_fp, hx3, pals[pi].colors[ci]);
                         if (ci < pals[pi].cnt - 1) fputc(',', g.bgndpal_fp);
                     }
                     fputs("\r\n\r\n", g.bgndpal_fp);
@@ -3003,6 +2985,9 @@ static void process_lod(const char *lod_path) {
     if (g.asm_fp) { fclose(g.asm_fp); g.asm_fp = NULL; }
     /* Write .TEXT/^Z trailer to all opened TBL files (LOADW writes trailer only at end) */
     for (int ft = 0; ft < g.n_tbl_files; ft++) {
+        const char *ext = strrchr(g.tbl_files[ft], '.');
+        if (g.old_mode && ext && (strcmp(ext, ".ASM") == 0 || strcmp(ext, ".GLO") == 0))
+            continue; /* /OLD: skip .TEXT for ASM/GLO files */
         FILE *tf = fopen(g.tbl_files[ft], "r+");
         if (tf) {
             fseek(tf, 0, SEEK_END);
@@ -3247,6 +3232,7 @@ int main(int argc, char *argv[]) {
     g.irw_data = (uint8_t*)calloc(1, g.irw_alloc);
     g.irw_size = 0;
     g.irw_bit = 0;
+    g.sagpal_combined = 1; /* default: combined SAG+PAL (NARC style); POF> sets to 0 */
 
     scan_bpp(lod_file);
     scan_for_bbb(lod_file);
