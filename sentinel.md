@@ -98,15 +98,12 @@ The PTTBL setup should be after line 7863.
 
 ## Fixed
 
-- **PT0X: read x1 in IT.EXE mode**: PT0X should use `ie->pttbl->x1` (own entry), not `ie->pttbl_pt0x->cbox` (`pttbls[pn-3]`). The ref -32768/-16384/0 match x1 at IT position.
-- **Per-image `ite_pttbl`**: saved from `img->ite_pttbl` to `ImageEntry->ite_pttbl` so the IT/standard selection persists across IMG file loads. Global `g.ite_pttbl` was being overwritten by subsequent IMG loads.
-- **`img->ite_pttbl` set**: Now saved during `img_load` when heuristic fires. Was never set before.
-- **BB5 PLYRDSP** fixed: 5/7 → 6/7.
+All BB5 and BB6 PT0X issues are now resolved.
 
-## Remaining: PLYRDSEQ / PLYRDSQ2
+**Bugs fixed:**
+1. **PT0X reads `flags` not `x1`**: The PT0X value in IT.EXE mode comes from the PTTBL `flags` field (offset 0). `flags=0x8000` → `-32768`, `0xC000` → `-16384`, `0x0000` → `0`. Was reading `x1` (offset 2) which was always zero.
+2. **Per-image `ite_pttbl`**: saved from `img->ite_pttbl` to `ImageEntry->ite_pttbl`. Global `g.ite_pttbl` was overwritten by subsequent IMG loads.
+3. **Heuristic extended to `n_seqscr=0`**: NBA_DNK1 etc. now also try IT position. Added IT validity check (non-zero `flags` past NUMDEFPAL) to avoid false positives for files like NBA_MSC1 where IT sits in zeroed palette area.
+4. **`img->ite_pttbl` saved**: Now set during `img_load` when heuristic fires. Was never set before.
 
-- BB5 PLYRDSEQ and BB6 PLYRDSQ2 still fail (PT0X=0 vs -32768/-16384).
-- Images come from `NBA_DNK*.IMG` files with `n_seqscr=0`, so the heuristic never runs.
-- The standard PTTBL position gives cbox=0 → PT0X=0 (wrong). The IT position gives x1=-32768 (correct).
-- Extending heuristic to n_seqscr=0 works for NBA_DNK but breaks BB4 (NBA_MSC1 has same `std_bad=1, it_bad=0` pattern but needs standard position).
-- No reliable discriminator found between files needing IT vs standard for n_seqscr=0 case.
+**Result:** BB5 6/7 → 7/7, BB6 5/6 → 6/6. Test suite: 14/7 → 16/5.

@@ -24,9 +24,9 @@ cd .. && bash test.sh
 
 | Test | Mode | TBLs | Result | Notes |
 |------|------|------|--------|-------|
-| **BB5** | Mixed | 6/7 | FAIL | PLYRDSEQ PT0X sentinel (-16384 vs -32768), same cosmetic issue as BB6 |
-| **BB6** | Mixed | 5/6 | FAIL | PLYRDSQ2 2 cosmetic PT0X sentinel differences (0 vs -32768) |
-| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR pre-existing LOADW false dedup bug |
+| **BB5** | Mixed | 7/7 | **PASS** | PT0X sentinel fixed: reads `flags` in IT.EXE mode |
+| **BB6** | Mixed | 6/6 | **PASS** | PT0X sentinel fixed: reads `flags` in IT.EXE mode |
+| **BB7** | Mixed | 15/16 | FAIL | OUTDOOR LEAF8 unused image, ref dedup bug |
 | **BAM** | SEQ | 0/1 | FAIL | WWF /SEQ mode not yet implemented |
 
 ### BB5 TBL List (refArt)
@@ -445,23 +445,21 @@ done
 
 ---
 
-## PT0X Sentinel Value
+## PT0X Sentinel Value — FIXED
 
-BB5 PLYRDSEQ and BB6 PLYRDSQ2 have cosmetic PT0X differences (6 and 2
-entries respectively). The reference uses a 3-way split (`-32768`, `-16384`,
-`0`) for different pttblnum ranges within NBA_DNK2.IMG. Our tool outputs
-`-32768` for all IT.EXE-mode entries.
+BB5 PLYRDSEQ and BB6 PLYRDSQ2 previously had PT0X differences: the
+reference uses a 3-way split (`-32768`, `-16384`, `0`) while our tool
+output `0` for all entries. This is now fixed.
 
-The root cause: `g.ite_pttbl` heuristic fires for NBA_DNK2 (seqcnt=2,
-scrcnt=1, palcnt=4, std_bad=3, it_bad=0 → ite_pttbl=1). But LOADW's
-reference output shows a mix of PT0X values, not all `-32768`.
+**Root cause** (2 bugs):
+1. `g.ite_pttbl` was a global overwritten by subsequent IMG loads — fixed
+   by per-image `ie->ite_pttbl`.
+2. The PT0X value in IT.EXE mode comes from the PTTBL `flags` field
+   (offset 0), not `x1` (offset 2). `flags=0x8000` → `-32768`,
+   `0xC000` → `-16384`, `0x0000` → `0`.
 
-Full-file PTTBL scans at every byte offset found no base where the three
-reference PT0X values co-exist from cbox computation. The reference may
-use a different PTTBL stride, different struct layout, or different cbox
-field offset than our 40-byte `sizeof(PTTBL)`.
-
-See `sentinel.md` for the full investigation log and untried hypotheses.
+The heuristic was also extended to `n_seqscr=0` IMGs (NBA_DNK1 etc.)
+with an IT validity check to avoid false positives.
 
 ## Current Test Results
 
@@ -472,18 +470,18 @@ See `sentinel.md` for the full investigation log and untried hypotheses.
 | **BB2** | PASS | — |
 | **BB3** | PASS | — |
 | **BB4** | PASS | — |
-| **BB5** | 6/7 | PLYRDSEQ (PT0X sentinel) |
-| **BB6** | 5/6 | PLYRDSQ2 (PT fields) |
-| **BB7** | 15/16 | OUTDOOR (false dedup) |
+| **BB5** | 7/7 | — |
+| **BB6** | 6/6 | — |
+| **BB7** | 15/16 | OUTDOOR (LEAF8 unused image, ref dedup bug) |
 | **BB8** | PASS | — |
 | **BBMUG** | PASS | — |
 | **BBVDA** | PASS | — |
 | **TROG** | 12/15 (9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO) | IMGTBL.ASM (BBB face images), BGNDTBL.ASM (HDRS indices), BGNDPAL.ASM (FACEPALS) |
-| **NARC1** | 18/21 | RLC encoder format |
+| **NARC1** | 20/21 | NARCMUGS (buggy LOAD.EXE ref, accepted) |
 | **CARN** | 0/13 | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | 21/21 PASS | — |
 
-**Overall: 14 pass, 7 fail** (v0.95)
+**Overall: 16 pass, 5 fail** (v0.96)
 
 ## Remaining Investigation Questions
 

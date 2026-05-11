@@ -637,18 +637,18 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BB2** | ZOF+XON | **PASS** (3/3) | |
 | **BB3** | ZOF+PT | **PASS** (2/2) | |
 | **BB4** | ZOF+XON | **PASS** (1/1) | |
-| **BB5** | Mixed | FAIL (6/7) | PLYRDSEQ PT0X sentinel, see `sentinel.md` |
-| **BB6** | Mixed | FAIL (5/6) | PLYRDSQ2 PT0X sentinel, see `sentinel.md` |
-| **BB7** | Mixed | FAIL (15/16) | OUTDOOR false dedup (pre-existing ref bug) |
+| **BB5** | Mixed | **PASS** (7/7) | |
+| **BB6** | Mixed | **PASS** (6/6) | |
+| **BB7** | Mixed | FAIL (15/16) | OUTDOOR LEAF8 unused image, ref dedup bug |
 | **BB8** | XON | **PASS** (3/3) | |
 | **BBMUG** | ZOF+XON | **PASS** (2/2) | |
 | **BBVDA** | VDA | **PASS** (1/1) | |
 | **TROG** | /OLD | FAIL (12/15) | 9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO pass; BBB handler |
-| **NARC1** | /OLD | FAIL (18/21) | RLC encoder format diffs |
+| **NARC1** | /OLD | FAIL (20/21) | NARCMUGS buggy LOAD.EXE ref (accepted) |
 | **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
 
-**14 pass, 7 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
+**16 pass, 5 fail** (v0.96). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -694,14 +694,14 @@ Additional fixes:
 
 The BB5 CMP=1 encoder cascade was resolved in v0.95 with a PTTBL shared-entry
 pointer arithmetic fix (`&pttbls[pttblnum-2]` UB → explicit `ptrdiff_t` offset).
-BB5: 3/7→6/7. The sole remaining BB5 failure is PLYRDSEQ (cosmetic PT0X
-sentinel: -16384 vs -32768, see `sentinel.md`).
+BB5/BB6 PT0X sentinel issues were fixed in v0.96 (PT0X reads PTTBL `flags` in
+IT.EXE mode, per-image `ite_pttbl`, heuristic extended to `n_seqscr=0`).
+BB5: 7/7, BB6: 6/6.
 
 The specific BGSPEAR6 LM/TM mismatch was fixed (the `if`/`else if` trail loop
 and 120-cap logic now match FUN_1000_6f20 exactly), and the broader cascade
 for BB6/BB7 was resolved with the PTTBL version gate and stride-width bpp scan
-fixes. BB6 CHEER now passes (stride-width bpp scan), and PLYRDSQ2 has only 2
-cosmetic PT0X sentinel differences remaining. BB7 went from 8/16→15/16 with
+fixes. BB6 CHEER now passes (stride-width bpp scan). BB7 went from 8/16→15/16 with
 PTTBL version gate + min-10 SIZX + IT.EXE validation; the sole remaining
 failure is OUTDOOR (pre-existing LOADW false dedup bug — reference has wrong
 LEAF pixels). MK2MIL, MK4MIL, and MK8MIL are fully byte-exact, confirming the
