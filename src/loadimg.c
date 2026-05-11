@@ -269,6 +269,7 @@ typedef struct {
     int      ppp;
     int      ite_pttbl;  /* 1 if IT.EXE PTTBL position was selected (A3X = own->X) */
     int      old_mode;   /* 1=/OLD (LOAD.EXE 4.50), 2=/OLD2 (LOAD.EXE 4.65): legacy output */
+    int      intel_hex;  /* 1 if /H: output Intel hex (0XXXXH) instead of Motorola (>XXXX) */
     int      rlc;        /* 1 if RLC> active: 2bpp run-length encoding */
 
     char     imgdir[MAX_PATH];
@@ -1372,7 +1373,10 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
         if (f == IHDR_PAL && !g.pon) continue;
 
         if (sz == SZ_L) {
-            fprintf(fp, "\t.long   ");
+            if (g.old_mode && !g.intel_hex)
+                fprintf(fp, "\t.long\t");
+            else
+                fprintf(fp, "\t.long   ");
             if (f == IHDR_SAG) {
                 uint32_t base = g.base_addr;
                 if (g.dual_bank) {
@@ -1387,25 +1391,32 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                     if (nf == IHDR_PAL && g.ihdr[ni].size == SZ_L) next_is_pal = 1;
                     break;
                 }
+                const char *hx = g.old_mode && !g.intel_hex ? ">%X" : (g.intel_hex ? "0%XH" : "0%xH");
+                const char *hx_comma = g.old_mode && !g.intel_hex ? ">%X," : (g.intel_hex ? "0%XH," : "0%xH,");
                 if (next_is_pal && g.old_mode) {
                     /* /OLD: SAG and PAL on separate .long lines */
                     if (ie->sag_is_cached)
-                        fprintf(fp, "0%xH\r\n", ie->sag);
+                        fprintf(fp, hx, ie->sag);
                     else
-                        fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
+                        fprintf(fp, hx, base + (ie->sag - section_base_bit));
+                    fprintf(fp, "\r\n");
                 } else if (next_is_pal) {
                     /* Normal: SAG and PAL combined on one line */
                     if (ie->sag_is_cached) {
                         if (have_pal)
-                            fprintf(fp, "0%xH,%s\r\n", ie->sag, ie->pal_name);
+                            fprintf(fp, hx_comma, ie->sag);
                         else
-                            fprintf(fp, "0%xH,-1\r\n", ie->sag);
+                            fprintf(fp, hx_comma, ie->sag);
                     } else {
                         if (have_pal)
-                            fprintf(fp, "0%xH,%s\r\n", base + (ie->sag - section_base_bit), ie->pal_name);
+                            fprintf(fp, hx_comma, base + (ie->sag - section_base_bit));
                         else
-                            fprintf(fp, "0%xH,-1\r\n", base + (ie->sag - section_base_bit));
+                            fprintf(fp, hx_comma, base + (ie->sag - section_base_bit));
                     }
+                    if (have_pal)
+                        fprintf(fp, "%s\r\n", ie->pal_name);
+                    else
+                        fprintf(fp, "-1\r\n");
                     /* Skip PAL field after combining */
                     for (int ni = i + 1; ni < g.n_ihdr; ni++) {
                         if (g.ihdr[ni].field == IHDR_PAL) { i = ni; break; }
@@ -1413,9 +1424,10 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                 } else {
                     /* SAG only (no PAL after it) */
                     if (ie->sag_is_cached)
-                        fprintf(fp, "0%xH\r\n", ie->sag);
+                        fprintf(fp, hx, ie->sag);
                     else
-                        fprintf(fp, "0%xH\r\n", base + (ie->sag - section_base_bit));
+                        fprintf(fp, hx, base + (ie->sag - section_base_bit));
+                    fprintf(fp, "\r\n");
                 }
             } else if (f == IHDR_PAL) {
                 if (have_pal)
@@ -1446,7 +1458,10 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                 if (n >= 32) break;
             }
             if (n > 0) {
-                fprintf(fp, "\t.word   ");
+                if (g.old_mode && !g.intel_hex)
+                    fprintf(fp, "\t.word\t");
+                else
+                    fprintf(fp, "\t.word   ");
                 for (int k = 0; k < n; k++) {
                     if (k > 0) fputc(',', fp);
                     if (is_ctrl[k])
@@ -2988,7 +3003,8 @@ static void process_lod(const char *lod_path) {
         if (tf) {
             fseek(tf, 0, SEEK_END);
             fprintf(tf, "\t.TEXT\r\n");
-            fputc(0x1a, tf);
+            if (!g.old_mode)
+                fputc(0x1a, tf);
             fclose(tf);
         }
     }
@@ -3068,9 +3084,10 @@ static void print_usage(const char *arg) {
     printf("  /A         Append mode (don't overwrite existing tables)\n");
     printf("  /OLD       Legacy LOAD.EXE 4.50 (4/27/90) mode (Narc, Trog).\n");
     printf("  /OLD2      Legacy LOAD.EXE 4.65 (9/3/91) mode (Total Carnage).\n");
-    printf("               Old-style: no CTRL field, SAG+PAL on same .long line,\n");
+    printf("               Old-style: Motorola hex (>XXXX), no CTRL field,\n");
     printf("               RLC> run-length encoding, 8bpp default.\n");
-    printf("  /H         This help\n");
+    printf("  /H         Intel hex (0XXXXH) with /OLD (modern assembler compat)\n");
+    printf("  /?         This help\n");
     printf("\n");
     if (arg) {
         printf("Unknown argument: %s\n", arg);
@@ -3108,7 +3125,8 @@ int main(int argc, char *argv[]) {
             /* Multi-char flags before single-char switch */
             { char abuf[64]; strncpy(abuf, a, 63); abuf[63] = 0; upcase(abuf);
               if (strcmp(abuf, "/OLD") == 0) { g.old_mode = 1; continue; }
-              if (strcmp(abuf, "/OLD2") == 0) { g.old_mode = 2; continue; } }
+              if (strcmp(abuf, "/OLD2") == 0) { g.old_mode = 2; continue; }
+              if (strcmp(abuf, "/H") == 0) { g.intel_hex = 1; continue; } }
 
             char flag = (char)toupper((unsigned char)a[1]);
             char *val = a + 2;
@@ -3139,7 +3157,7 @@ int main(int argc, char *argv[]) {
             case 'B': g.bpp_from_pal = 1; break;
             case '3': g.limit3scales = 1; break;
             case 'A': g.append = 1; break;
-            case 'H': print_usage(NULL); return 0;
+            case '?': print_usage(NULL); return 0;
             default:
                 fprintf(stderr, "Unknown flag: %s\n", a);
                 print_usage(a);
@@ -3309,7 +3327,8 @@ int main(int argc, char *argv[]) {
 
     if (g.asm_fp) {
         fprintf(g.asm_fp, "\t.TEXT\r\n");
-        fputc(0x1a, g.asm_fp);
+        if (!g.old_mode)
+            fputc(0x1a, g.asm_fp);
         fclose(g.asm_fp);
     }
     if (g.glo_fp) fclose(g.glo_fp);
