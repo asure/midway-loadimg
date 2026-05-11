@@ -3174,7 +3174,10 @@ int main(int argc, char *argv[]) {
         path_cat(glo_path, tbl_dir, "IMGTBL.GLO", MAX_PATH);
         path_cat(pal_path, tbl_dir, "IMGPAL.ASM", MAX_PATH);
     } else {
-        strncpy(asm_path, tbl_name, MAX_PATH-1);
+        if (g.old_mode)
+            strncpy(asm_path, "IMGTBL.ASM", MAX_PATH-1);
+        else
+            strncpy(asm_path, tbl_name, MAX_PATH-1);
         strncpy(glo_path, "IMGTBL.GLO", MAX_PATH-1);
         strncpy(pal_path, "IMGPAL.ASM", MAX_PATH-1);
     }
