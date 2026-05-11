@@ -2809,14 +2809,14 @@ static void process_lod(const char *lod_path) {
                           if (assigned_mi != mi) continue;
                            int wx_blks = gobjs[gi].wx;
                           int ii = gobjs[gi].ii;
-                          int hdr_idx = 0;
-                          for (int di = 0; di < n_bdds; di++) {
-                              if (bdds[di].idx == ii) {
-                                   wx_blks = (wx_blks & 0xFFF0) | 0x0040 | (gobjs[gi].fl & 0x0F);
-                                  hdr_idx = di;
-                                  break;
-                              }
-                          }
+                           int hdr_idx = 0;
+                           for (int di = 0; di < n_bdds; di++) {
+                               if (bdds[di].idx == ii) {
+                                    wx_blks = (wx_blks & 0xFFF0) | 0x0040 | (gobjs[gi].fl & 0x0F);
+                                   hdr_idx = di;
+                                   break;
+                               }
+                           }
                           blk_objs[n_blk].wx = wx_blks;
                          /* Module-local coordinates: x relative to first object, y relative to sy_base */
                          int first_d = mod_first_depth[mi];
@@ -2829,9 +2829,9 @@ static void process_lod(const char *lod_path) {
                        const char *bw = g.old_mode ? "\t.word   " : "\t.word\t";
                        const char *bl = g.old_mode ? "\t.long   " : "\t.long\t";
                        for (int bi = 0; bi < n_blk; bi++) {
-                           if (bi == 0) {
-                               if (g.old_mode)
-                                   fprintf(g.bgnd_fp, "%s0%xH\t;flags\r\n", bw, blk_objs[bi].wx);
+                            if (bi == 0) {
+                                if (g.old_mode)
+                                    fprintf(g.bgnd_fp, "%s0%xH\t;flags\r\n", bw, blk_objs[bi].wx);
                                else
                                    fprintf(g.bgnd_fp, "%s0%XH\t;flags\r\n", bw, blk_objs[bi].wx);
                                fprintf(g.bgnd_fp, "%s%d,%d ;x,y\r\n", bw, blk_objs[bi].x, blk_objs[bi].y);
