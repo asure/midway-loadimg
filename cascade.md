@@ -478,12 +478,12 @@ See `sentinel.md` for the full investigation log and untried hypotheses.
 | **BB8** | PASS | — |
 | **BBMUG** | PASS | — |
 | **BBVDA** | PASS | — |
-| **TROG** | 10/15 (9 TBLs + IMGPAL) | IMGTBL.ASM (BBB images), IMGTBL.GLO (order), BGND format |
+| **TROG** | 12/15 (9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO) | IMGTBL.ASM (BBB face images), BGNDTBL.ASM (HDRS indices), BGNDPAL.ASM (FACEPALS) |
 | **NARC1** | 18/21 | RLC encoder format |
 | **CARN** | 0/13 | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | 21/21 PASS | — |
 
-**Overall: 15 pass, 6 fail** (v0.95)
+**Overall: 14 pass, 7 fail** (v0.95)
 
 ## Remaining Investigation Questions
 

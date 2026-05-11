@@ -42,27 +42,15 @@ EOF
 
 | File | Status | Notes |
 |------|--------|-------|
-| `TROGDDAT.TBL` | **PASS** | |
-| `TROGENEM.TBL` | **PASS** | |
-| `TROGSPRG.TBL` | **PASS** | |
-| `TROGWHL.TBL` | **PASS** | |
-| `TROGTEXT.TBL` | **PASS** | |
-| `TROGCAVE.TBL` | **PASS** | |
-| `TROGTDAT.TBL` | **PASS** | |
-| `TROGSCOR.TBL` | **PASS** | |
-| `TROGTREX.TBL` | **PASS** | |
+| All 9 TBLs | **PASS** | TROGDDAT, TROGENEM, TROGSPRG, TROGWHL, TROGTEXT, TROGCAVE, TROGTDAT, TROGSCOR, TROGTREX |
 | `IMGPAL.ASM` | **PASS** | |
-| `BGNDTBL.GLO` | **PASS** | |
-| `IMGTBL.ASM` | ✗ | Missing TROGMOUTH/MOUTHBACK (BBB images to main TBL) + .include BGNDTBL.GLO |
-| `IMGTBL.GLO` | ✗ | .globl ordering (palette entries before image entries) |
-| `BGNDTBL.ASM` | ✗ | BBB handler format (DMA ctrl, spacing, hex case) |
-| `BGNDPAL.ASM` | ✗ | BBB handler format (spacing, hex case) |
+| `IMGTBL.GLO` | **PASS** | Image + palette .globl with blank line separators |
+| `BGNDTBL.GLO` | **PASS** | FACEPALS + palettes + BMOD with blank line separators |
+| `IMGTBL.ASM` | ✗ | 20 lines: TROGMOUTH/MOUTHBACK missing (BBB face images in main TBL) |
+| `BGNDTBL.ASM` | ✗ | 4616 lines: HDRS index in BLKS differs (~1.5× factor in sub-modules) |
+| `BGNDPAL.ASM` | ✗ | 267 lines: Missing FACEPALS refs + palette color line format |
 | `IMGASEQ.ASM` | MISSING | Not yet generated |
 | `IMGSRC.ASM` | MISSING | Not yet generated |
-
-All 9 per-game TBLs + IMGPAL.ASM are byte-exact. The remaining failures are
-BBB handler output format issues (BGNDTBL.ASM, BGNDPAL.ASM, IMGTBL.GLO) and
-the BBB background images in IMGTBL.ASM (TROGMOUTH, MOUTHBACK).
 
 ---
 

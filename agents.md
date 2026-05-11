@@ -626,12 +626,12 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 
 | Test | Mode | Result | Notes |
 |------|------|--------|-------|
-| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | IRW + TBLs byte-exact, IMGTBL.ASM match |
+| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | |
 | **MK3MIL** | ZOF | **PASS** (5/5) | |
 | **MK4MIL** | ZON | **PASS** (6/6) | |
 | **MK5MIL** | ZON | **PASS** (7/7) | |
 | **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
-| **MK7MIL** | Mixed | **PASS** (11/11) | IMGTBL.ASM + BGNDTBL.GLO match |
+| **MK7MIL** | Mixed | FAIL (10/11) | BGNDTBL.GLO has extra ENDMARKER entry |
 | **MK8MIL** | FRM | **PASS** (1/1) | |
 | **BB** | ZOF+XON | **PASS** (2/2) | |
 | **BB2** | ZOF+XON | **PASS** (3/3) | |
@@ -643,12 +643,12 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BB8** | XON | **PASS** (3/3) | |
 | **BBMUG** | ZOF+XON | **PASS** (2/2) | |
 | **BBVDA** | VDA | **PASS** (1/1) | |
-| **TROG** | /OLD | FAIL (10/15) | 9 TBLs + IMGPAL.ASM pass; BBB handler format diffs |
+| **TROG** | /OLD | FAIL (12/15) | 9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO pass; BBB handler |
 | **NARC1** | /OLD | FAIL (18/21) | RLC encoder format diffs |
 | **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
 
-**15 pass, 6 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
+**14 pass, 7 fail** (v0.95). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
