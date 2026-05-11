@@ -2411,19 +2411,7 @@ static void process_lod(const char *lod_path) {
                 bdds[n_bdds].fl = f; bdds[n_bdds].pix = (w > 0 && h > 0) ? bdd_data + bdp : NULL;
                 n_bdds++; bdp += (w * h > 0) ? w * h : 0;
             }
-            /* Sort BDD images by idx for consistent HDRS ordering (LOAD.EXE behavior) */
-            for (int si = 0; si < n_bdds - 1; si++) {
-                for (int sj = si + 1; sj < n_bdds; sj++) {
-                    if (bdds[si].idx > bdds[sj].idx) {
-                        int t_idx = bdds[si].idx, t_w = bdds[si].w, t_h = bdds[si].h, t_fl = bdds[si].fl;
-                        uint8_t *t_pix = bdds[si].pix;
-                        bdds[si].idx = bdds[sj].idx; bdds[si].w = bdds[sj].w; bdds[si].h = bdds[sj].h;
-                        bdds[si].fl = bdds[sj].fl; bdds[si].pix = bdds[sj].pix;
-                        bdds[sj].idx = t_idx; bdds[sj].w = t_w; bdds[sj].h = t_h;
-                        bdds[sj].fl = t_fl; bdds[sj].pix = t_pix;
-                    }
-                }
-            }
+
 
             /* Palettes */
             struct { char name[64]; int cnt; uint16_t *colors; } pals[64];
@@ -2527,13 +2515,11 @@ static void process_lod(const char *lod_path) {
              */
             int bgnd_count = 0;
             for (int di = 0; di < n_bdds; di++) {
-                if (img_module[di] < 0) continue;
-                 bgnd_count++;
-
-                 int w = bdds[di].w, h = bdds[di].h;
-                 uint8_t *pix = bdds[di].pix;
-                 int sizx_a = ((w + 3) & ~3) > 0 ? ((w + 3) & ~3) : 1;
-                 int mod_i = img_module[di]; /* -1 if unreferenced */
+                 bgnd_count++; 
+                  int w = bdds[di].w, h = bdds[di].h;
+                  uint8_t *pix = bdds[di].pix;
+                  int sizx_a = ((w + 3) & ~3) > 0 ? ((w + 3) & ~3) : 1;
+                  int mod_i = img_module[di]; /* -1 if unreferenced */
                  int bg_dedup_idx = -1;
 
                   if (!img_written[di]) {
