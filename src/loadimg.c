@@ -2833,8 +2833,8 @@ static void process_lod(const char *lod_path) {
                            for (int di = 0; di < n_bdds; di++) {
                                if (bdds[di].idx == ii) {
                                     wx_blks = (wx_blks & 0xFFF0) | 0x0040 | (gobjs[gi].fl & 0x0F);
-                                   hdr_idx = di;
-                                   break;
+                   hdr_idx = di * 2;
+                    break;
                                }
                            }
                           blk_objs[n_blk].wx = wx_blks;
@@ -2864,12 +2864,7 @@ static void process_lod(const char *lod_path) {
                                 fprintf(g.bgnd_fp, "\r\n");
                            }
                        }
-                       fprintf(g.bgnd_fp, "\t.word\t");
-                       if (g.old_mode && !g.intel_hex)
-                           fputs(">FFFF", g.bgnd_fp);
-                       else
-                           fputs("0FFFFH", g.bgnd_fp);
-                       fprintf(g.bgnd_fp, "\t;End Marker\r\n");
+                       fprintf(g.bgnd_fp, "\t.word\t0FFFFH\t;End Marker\r\n");
                  }
              }
 
@@ -2921,14 +2916,8 @@ static void process_lod(const char *lod_path) {
                         fprintf(g.bgndequ_fp, "H%s .EQU\t%d\r\n", mn, mh);
                     }
                 fprintf(g.bgnd_fp, "%sBMOD:\r\n", mn);
-                if (g.old_mode)
-                    fprintf(g.bgnd_fp, "\t.word   %d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
-                else
-                    fprintf(g.bgnd_fp, "\t.word\t%d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
-                if (g.old_mode)
-                    fprintf(g.bgnd_fp, "\t.long   %sBLKS, %s, %sPALS\r\n", mn, cur_hdrs, hdr_suffix);
-                else
-                    fprintf(g.bgnd_fp, "\t.long\t%sBLKS, %s, %sPALS\r\n", mn, cur_hdrs, hdr_suffix);
+                fprintf(g.bgnd_fp, "\t.word\t%d,%d,%d\t;x size, y size, #blocks\r\n", mw, mh, mod_obj_count[mi]);
+                fprintf(g.bgnd_fp, "\t.long\t%sBLKS, %s, %sPALS\r\n", mn, cur_hdrs, hdr_suffix);
                 }
             }
             if (g.bgndtbl_glo_fp) {
