@@ -1325,7 +1325,7 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     /* PT IHDR fields: LOADW tries shared PTTBL header fields first, then own entry's
      * box[0]/box[1] fields as fallback (when header fields are all zero).
      * When g.ite_pttbl is set, use own entry fields per IT.EXE (itimg.asm:2338-2351). */
-    case IHDR_PT0X: { PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; if (g.ite_pttbl) return -32768; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
+     case IHDR_PT0X: { PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
     case IHDR_PT2X: {
         if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->X;
         if (ie->pttbl_shared && ie->pttbl_shared->x2) return (int)ie->pttbl_shared->x2;
