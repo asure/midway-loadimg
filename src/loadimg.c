@@ -2298,6 +2298,10 @@ static void process_lod(const char *lod_path) {
                 }
                 g.bgndequ_fp = fopen("BGNDEQU.H", "w");
                 g.bgndtbl_glo_fp = fopen("BGNDTBL.GLO", "w");
+                /* Insert .include BGNDTBL.GLO into IMGTBL.ASM after header */
+                if (g.asm_fp && g.old_mode) {
+                    fprintf(g.asm_fp, "\r\n\t.include BGNDTBL.GLO\r\n");
+                }
             }
 
             char bdb_path[MAX_PATH], bdd_path[MAX_PATH];
