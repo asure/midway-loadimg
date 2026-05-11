@@ -1640,16 +1640,13 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
             }
         }
         IMG_REC *rec = NULL;
-        int img_is_oldfmt = (cur->imgfile->hdr.version == 0x634);
         for (int i = 0; i < cur->imgfile->n_images; i++) {
             char n[MAX_NAME];
             strncpy(n, cur->imgfile->images[i].name, MAX_NAME-1);
             n[MAX_NAME-1] = 0;
             for (int j = 0; j < MAX_NAME; j++) if (!n[j]) break;
-             if (strcmp(n, base_name) == 0) {
-                 rec = &cur->imgfile->images[i];
-                 if (img_is_oldfmt) break;
-             }
+             if (strcmp(n, base_name) == 0)
+                 rec = &cur->imgfile->images[i];  /* LOADW uses LAST matching record */
          }
          if (!rec) {
              fprintf(stderr, "WARNING: image %s not found in %s\n", name, cur->imgpath);
