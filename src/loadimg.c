@@ -647,25 +647,34 @@ static ImgFile* img_load(const char *path) {
      * The shared entry (pttblnum - 2) and pt0x entry (pttblnum - 3) are used for
      * PT field computation (PT2X/PT2Y and PT0X respectively).
      */
-    uint32_t pttbl_ofs = pal_ofs + (uint32_t)img->n_palettes * sizeof(PAL_REC) + 6;
-    /* SEQSCR entries between palettes and PTTBL (pre-v0x654 layout).
-     * v0x654+ stores PTTBL before SEQ/SCR entries; older versions store after. */
+    /* PTTBL position: try standard base first, then IT.EXE base.
+     * IT.EXE position = pal_ofs + (palcnt-3)*26, then skip SEQ/SCR WITH frame data.
+     * Standard position = same base + 84 bytes (= 3*26+6), skip SEQ headers only.
+     *
+     * When standard position has bad X/Z, try IT. For n_seqscr=0, also try IT when
+     * standard has bad entries AND the IT position has non-trivial x1 data (avoids
+     * picking IT for files like NBA_MSC1 where IT sits within zeroed palette area). */
     int n_seqscr = (int)img->hdr.seqcnt + (int)img->hdr.scrcnt;
-    if (n_seqscr > 0 && img->hdr.version < 0x654) {
-        /* Standard position: skip only 98-byte SEQSCR headers (no frame data). */
-        pttbl_ofs += (uint32_t)n_seqscr * 98;
-        g.ite_pttbl = 0;
+    uint32_t pttbl_ofs;
+    uint32_t std_ofs = pal_ofs + (uint32_t)img->n_palettes * sizeof(PAL_REC) + 6;
+    int tried_std = 0;
 
-        /* Validate standard position: count entries with out-of-range A3X/A3Z/id. */
+    if (n_seqscr > 0 && img->hdr.version < 0x654) {
+        std_ofs += (uint32_t)n_seqscr * 98;
+        tried_std = 1;
+    }
+    if (img->hdr.version < 0x654 && img->n_palettes > 3) {
+        /* Check if standard position has bad X/Z */
         int std_bad = 0;
-        for (int ei = 0; ei < 10 && pttbl_ofs + 40 <= img->size; ei++) {
-            int16_t X = *(int16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 8);
-            int16_t Z = *(int16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 12);
-            uint16_t id = *(uint16_t*)(img->data + pttbl_ofs + (uint32_t)ei * 40 + 14);
+        for (int ei = 0; ei < 10 && std_ofs + 40 <= img->size; ei++) {
+            int16_t X = *(int16_t*)(img->data + std_ofs + (uint32_t)ei * 40 + 8);
+            int16_t Z = *(int16_t*)(img->data + std_ofs + (uint32_t)ei * 40 + 12);
+            uint16_t id = *(uint16_t*)(img->data + std_ofs + (uint32_t)ei * 40 + 14);
             if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
                 std_bad++;
         }
-        if (std_bad > 0 && img->n_palettes > 3) {
+        if (std_bad > 0 || !tried_std) {
+            /* Compute IT.EXE position */
             uint32_t it_base = pal_ofs + (uint32_t)(img->n_palettes - 3) * sizeof(PAL_REC);
             uint32_t p = it_base;
             int ok = 1;
@@ -676,18 +685,29 @@ static ImgFile* img_load(const char *path) {
                 p += 98 + (uint32_t)num * 18;
             }
             if (ok && p + 40 <= img->size) {
-                int it_bad = 0;
-                for (int ei = 0; ei < 10 && p + 40 <= img->size; ei++) {
-                    int16_t X = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 8);
-                    int16_t Z = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 12);
-                    uint16_t id = *(uint16_t*)(img->data + p + (uint32_t)ei * 40 + 14);
-                    if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
-                        it_bad++;
+                /* Verify IT position has non-trivial x1 data (entries past NUMDEFPAL) */
+                int it_valid = 0;
+                for (int ei = 3; ei < 8 && p + (uint32_t)ei * 40 + 2 <= img->size; ei++) {
+                    int16_t x1 = *(int16_t*)(img->data + p + (uint32_t)ei * 40);
+                    if (x1 != 0 && x1 != -1) { it_valid = 1; break; }
                 }
-                if (it_bad < std_bad) { pttbl_ofs = p; g.ite_pttbl = 1; img->ite_pttbl = 1; }
-            }
-        }
-    }
+                if (it_valid) {
+                    int it_bad = 0;
+                    for (int ei = 0; ei < 10 && p + 40 <= img->size; ei++) {
+                        int16_t X = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 8);
+                        int16_t Z = *(int16_t*)(img->data + p + (uint32_t)ei * 40 + 12);
+                        uint16_t id = *(uint16_t*)(img->data + p + (uint32_t)ei * 40 + 14);
+                        if (X > 1000 || X < -1000 || Z > 1000 || Z < -1000 || id > 1000)
+                            it_bad++;
+                    }
+                    if (it_bad < std_bad) { pttbl_ofs = p; g.ite_pttbl = 1; img->ite_pttbl = 1; }
+                    else pttbl_ofs = std_ofs;
+                } else pttbl_ofs = std_ofs;
+            } else pttbl_ofs = std_ofs;
+        } else pttbl_ofs = std_ofs;
+        if (tried_std && !pttbl_ofs) pttbl_ofs = std_ofs;
+    } else
+        pttbl_ofs = std_ofs;
 
     /* Compute max PTTBL index */
     int max_pttbl = -1;
@@ -1326,7 +1346,7 @@ static int get_ihdr_word_value(ImageEntry *ie, int field, int denom) {
     /* PT IHDR fields: LOADW tries shared PTTBL header fields first, then own entry's
      * box[0]/box[1] fields as fallback (when header fields are all zero).
      * When g.ite_pttbl is set, use own entry fields per IT.EXE (itimg.asm:2338-2351). */
-     case IHDR_PT0X: { if (ie->ite_pttbl) { if (!ie->pttbl) return -1; return (int16_t)ie->pttbl->x1; } PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
+     case IHDR_PT0X: { if (ie->ite_pttbl) { if (!ie->pttbl) return -1; return (int16_t)ie->pttbl->flags; } PTTBL *p = ie->pttbl_pt0x ? ie->pttbl_pt0x : ie->pttbl; if (!p) return -1; return (int16_t)((uint16_t)(uint8_t)p->cbox.x | ((uint16_t)(uint8_t)p->cbox.y << 8)); }
     case IHDR_PT2X: {
         if (ie->pttbl && g.ite_pttbl) return (int)ie->pttbl->X;
         if (ie->pttbl_shared && ie->pttbl_shared->x2) return (int)ie->pttbl_shared->x2;
@@ -1841,10 +1861,10 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                * but the PT fields (x1/x2/X/Y/Z at bytes 0-15) must be valid. */
               size_t file_size = cur->imgfile->size;
               #define PTTBL_HDR_SIZE 16
-              if (rec->pttblnum >= 0 && rec->pttblnum < cur->imgfile->n_pttbls) {
-                  size_t entry_off = (uint8_t*)&cur->imgfile->pttbls[rec->pttblnum] - cur->imgfile->data;
-                  if (entry_off + PTTBL_HDR_SIZE <= file_size)
-                      ie->pttbl = &cur->imgfile->pttbls[rec->pttblnum];
+               if (rec->pttblnum >= 0 && rec->pttblnum < cur->imgfile->n_pttbls) {
+                   size_t entry_off = (uint8_t*)&cur->imgfile->pttbls[rec->pttblnum] - cur->imgfile->data;
+                   if (entry_off + PTTBL_HDR_SIZE <= file_size)
+                       ie->pttbl = &cur->imgfile->pttbls[rec->pttblnum];
               }
               /* LOADW accesses pttbls[pttblnum-2] and pttbls[pttblnum-3] unconditionally
                * (no >= 2 / >= 3 guard), so pttblnum=0,1 reach into the palette data area
