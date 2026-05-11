@@ -96,8 +96,17 @@ The 0xABCD check at line 7863 is in the PTTBL allocation path. Lines 7880-7890 s
 the n_seqscr (bp-6h) loop counting, and line 7892 shows `push 62h` (98-byte alloc).
 The PTTBL setup should be after line 7863.
 
-## File State
+## Fixed
 
-- No uncommitted code changes (the `> 4` attempt was stashed: `git stash`)
-- Test suite: 15 pass / 4 fail (unchanged)
-- `g.ite_pttbl` heuristic condition: `n_palettes > 3` (original, unchanged)
+- **PT0X: read x1 in IT.EXE mode**: PT0X should use `ie->pttbl->x1` (own entry), not `ie->pttbl_pt0x->cbox` (`pttbls[pn-3]`). The ref -32768/-16384/0 match x1 at IT position.
+- **Per-image `ite_pttbl`**: saved from `img->ite_pttbl` to `ImageEntry->ite_pttbl` so the IT/standard selection persists across IMG file loads. Global `g.ite_pttbl` was being overwritten by subsequent IMG loads.
+- **`img->ite_pttbl` set**: Now saved during `img_load` when heuristic fires. Was never set before.
+- **BB5 PLYRDSP** fixed: 5/7 → 6/7.
+
+## Remaining: PLYRDSEQ / PLYRDSQ2
+
+- BB5 PLYRDSEQ and BB6 PLYRDSQ2 still fail (PT0X=0 vs -32768/-16384).
+- Images come from `NBA_DNK*.IMG` files with `n_seqscr=0`, so the heuristic never runs.
+- The standard PTTBL position gives cbox=0 → PT0X=0 (wrong). The IT position gives x1=-32768 (correct).
+- Extending heuristic to n_seqscr=0 works for NBA_DNK but breaks BB4 (NBA_MSC1 has same `std_bad=1, it_bad=0` pattern but needs standard position).
+- No reliable discriminator found between files needing IT vs standard for n_seqscr=0 case.
