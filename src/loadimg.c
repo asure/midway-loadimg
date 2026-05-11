@@ -2340,7 +2340,8 @@ static void process_lod(const char *lod_path) {
                 fprintf(g.bgnd_fp, "%s:\r\n", cur_hdrs);
             }
              if (g.bgndtbl_glo_fp) {
-                fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sPALS\r\n\r\n", hdr_suffix);
+                fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sPALS\r\n", hdr_suffix);
+                if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
             }
 
 #define MAX_GLOBJ 4096
@@ -2914,10 +2915,14 @@ static void process_lod(const char *lod_path) {
                 }
             }
             if (g.bgndtbl_glo_fp) {
-                for (int pi = 0; pi < np; pi++)
-                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%s\r\n\r\n", pals[pi].name);
-                for (int bi = 0; bi < n_bmod; bi++)
-                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sBMOD\r\n\r\n", bmod_list[bi]);
+                for (int pi = 0; pi < np; pi++) {
+                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%s\r\n", pals[pi].name);
+                    if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
+                }
+                for (int bi = 0; bi < n_bmod; bi++) {
+                    fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sBMOD\r\n", bmod_list[bi]);
+                    if (g.old_mode) fprintf(g.bgndtbl_glo_fp, "\r\n");
+                }
             }
 
             if (g.bgndpal_fp)
