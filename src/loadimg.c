@@ -1299,6 +1299,7 @@ static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual
 
     if (g.main_glo_fp) {
         fprintf(g.main_glo_fp, "\t.globl\t%s\r\n", pe->name);
+        if (g.old_mode) fprintf(g.main_glo_fp, "\r\n");
     }
 }
 
@@ -1462,10 +1463,12 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
 }
 
         static void write_global(const char *name) {
-     fprintf(g.glo_fp, "\t.%s\t%s\r\n",
+     FILE *fp = g.main_glo_fp ? g.main_glo_fp : g.glo_fp;
+     if (!fp) return;
+     fprintf(fp, "\t.%s\t%s\r\n",
              strcmp(name, "ENDMARKER") == 0 ? "global" : "globl", name);
      if (g.old_mode && strcmp(name, "ENDMARKER") != 0)
-         fprintf(g.glo_fp, "\r\n");
+         fprintf(fp, "\r\n");
  }
 
 /* =========================================================================
@@ -1997,9 +2000,17 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
           if (g.build_tables && g.asm_fp)
               write_image_tbl(g.asm_fp, ie);
 
-          /* Write .globl for each image in /OLD mode; otherwise only ENDMARKER */
-          if (g.glo_fp && (g.old_mode || strcmp(name, "ENDMARKER") == 0))
-             write_global(name);
+          /* Write .globl for each image. In /OLD mode, use the TBL label
+           * name (without +META suffix) and only for main IMGTBL.ASM entries;
+           * per-game TBL images don't get .globl in IMGTBL.GLO. */
+          if (g.glo_fp && (g.old_mode || strcmp(name, "ENDMARKER") == 0)) {
+              if (!g.old_mode) {
+                  write_global(name);
+              } else if (g.asm_path[0] && strstr(g.asm_path, "IMGTBL") != NULL) {
+                  const char *globl_name = ie->name[0] ? ie->name : name;
+                  write_global(globl_name);
+              }
+          }
     }
 }
 
@@ -2328,8 +2339,8 @@ static void process_lod(const char *lod_path) {
                 snprintf(cur_hdrs, sizeof(cur_hdrs), "%sHDRS", hdr_suffix);
                 fprintf(g.bgnd_fp, "%s:\r\n", cur_hdrs);
             }
-            if (g.bgndtbl_glo_fp) {
-                fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sPALS\r\n", hdr_suffix);
+             if (g.bgndtbl_glo_fp) {
+                fprintf(g.bgndtbl_glo_fp, "\t.globl\t%sPALS\r\n\r\n", hdr_suffix);
             }
 
 #define MAX_GLOBJ 4096
@@ -2399,6 +2410,19 @@ static void process_lod(const char *lod_path) {
                 bdds[n_bdds].idx = idx; bdds[n_bdds].w = w; bdds[n_bdds].h = h;
                 bdds[n_bdds].fl = f; bdds[n_bdds].pix = (w > 0 && h > 0) ? bdd_data + bdp : NULL;
                 n_bdds++; bdp += (w * h > 0) ? w * h : 0;
+            }
+            /* Sort BDD images by idx for consistent HDRS ordering (LOAD.EXE behavior) */
+            for (int si = 0; si < n_bdds - 1; si++) {
+                for (int sj = si + 1; sj < n_bdds; sj++) {
+                    if (bdds[si].idx > bdds[sj].idx) {
+                        int t_idx = bdds[si].idx, t_w = bdds[si].w, t_h = bdds[si].h, t_fl = bdds[si].fl;
+                        uint8_t *t_pix = bdds[si].pix;
+                        bdds[si].idx = bdds[sj].idx; bdds[si].w = bdds[sj].w; bdds[si].h = bdds[sj].h;
+                        bdds[si].fl = bdds[sj].fl; bdds[si].pix = bdds[sj].pix;
+                        bdds[sj].idx = t_idx; bdds[sj].w = t_w; bdds[sj].h = t_h;
+                        bdds[sj].fl = t_fl; bdds[sj].pix = t_pix;
+                    }
+                }
             }
 
             /* Palettes */
