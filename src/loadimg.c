@@ -1270,17 +1270,21 @@ static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual
     FILE *fp = g.pal_fp;
     if (!fp) return;
     fprintf(fp, "%s:\r\n", pe->name);
-    if (g.old_mode)
+    if (g.old_mode && !g.intel_hex)
+        fprintf(fp, "\t.word\t%3d\r\n", pe->numc);
+    else if (g.old_mode)
         fprintf(fp, "\t.word    %2d\r\n", pe->numc);
     else
         fprintf(fp, "\t.word\t%3d\r\n", pe->numc);
 
     int per_line = 8;
-    const char *word_pre = g.old_mode ? "\t.word   " : "\t.word\t";
+    const char *word_pre = (g.old_mode && !g.intel_hex) ? "\t.word\t" : (g.old_mode ? "\t.word   " : "\t.word\t");
     for (int i = 0; i < pe->numc; i++) {
         if (i % per_line == 0) fprintf(fp, "%s", word_pre);
         uint16_t v = colors[i];
-        if (v < 0x10)
+        if (g.old_mode && !g.intel_hex)
+            fprintf(fp, ">%X", v);
+        else if (v < 0x10)
             fprintf(fp, "%02XH", v);
         else if (v < 0x100)
             fprintf(fp, "%03XH", v);
@@ -3210,7 +3214,16 @@ int main(int argc, char *argv[]) {
     if (g.build_tables) {
         g.asm_fp = fopen(asm_path, "w");
         if (!g.asm_fp) die("cannot create: %s", asm_path);
-        write_tbl_header(g.asm_fp);
+        if (g.old_mode && !g.intel_hex) {
+            fprintf(g.asm_fp, "\t.FILE 'imgtbl.asm'\r\n");
+            fprintf(g.asm_fp, "\t.OPTION B,D,L,T\r\n");
+            fprintf(g.asm_fp, "\r\n");
+            fprintf(g.asm_fp, "\t.include imgtbl.glo\r\n");
+            fprintf(g.asm_fp, "\t.DATA\r\n");
+            fprintf(g.asm_fp, "\t.even\r\n");
+        } else {
+            write_tbl_header(g.asm_fp);
+        }
         g.glo_fp = fopen(glo_path, g.append ? "a" : "w");
         if (!g.glo_fp) die("cannot create: %s", glo_path);
         g.main_glo_fp = fopen(glo_path, g.append ? "a" : "w");
@@ -3281,19 +3294,23 @@ int main(int argc, char *argv[]) {
                     fprintf(imgasm_fp, "\t.DATA\r\n");
                     fprintf(imgasm_fp, "\t.even\r\n");
                 }
-                if (g.n_glo_files > 0)
+                if (!g.old_mode && g.n_glo_files > 0)
                     fprintf(imgasm_fp, "\r\n");
-                for (int gi = 0; gi < g.n_glo_files; gi++) {
-                    fprintf(imgasm_fp, "\t.include %s\r\n", g.glo_files[gi]);
-                    if (gi < g.n_glo_files - 1)
-                        fprintf(imgasm_fp, "\r\n");
+                if (!g.old_mode) {
+                    for (int gi = 0; gi < g.n_glo_files; gi++) {
+                        fprintf(imgasm_fp, "\t.include %s\r\n", g.glo_files[gi]);
+                        if (gi < g.n_glo_files - 1)
+                            fprintf(imgasm_fp, "\r\n");
+                    }
                 }
                 fclose(imgasm_fp);
             }
         }
         /* If IMGTBL.ASM was written via ASM> (need_write=0), insert GLO includes
-         * right after the header (.even line), not at the end. */
-        if (!need_write && g.n_glo_files > 0) {
+         * right after the header (.even line), not at the end.
+         * Skip for /OLD mode: header already has .include imgtbl.glo and
+         * BGNDTBL.GLO is handled by the BBB handler. */
+        if (!need_write && g.n_glo_files > 0 && !g.old_mode) {
             FILE *imgasm_fp = fopen(imgasm_path, "r");
             if (imgasm_fp) {
                 char buf[65536];

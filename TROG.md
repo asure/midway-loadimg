@@ -38,19 +38,36 @@ EOF
 
 ---
 
-## Current Status (v0.95)
+## Current Status (v0.95) — Motorola hex
 
 | File | Status | Notes |
 |------|--------|-------|
-| All 9 TBLs | **PASS** | TROGDDAT, TROGENEM, TROGSPRG, TROGWHL, TROGTEXT, TROGCAVE, TROGTDAT, TROGSCOR, TROGTREX |
-| `IMGPAL.ASM` | **PASS** | |
-| `IMGTBL.GLO` | **PASS** | Image + palette .globl with blank line separators |
-| `BGNDTBL.GLO` | **PASS** | FACEPALS + palettes + BMOD with blank line separators |
-| `IMGTBL.ASM` | ✗ | 20 lines: TROGMOUTH/MOUTHBACK missing (BBB face images in main TBL) |
-| `BGNDTBL.ASM` | ✗ | 4616 lines: HDRS index in BLKS differs (~1.5× factor in sub-modules) |
-| `BGNDPAL.ASM` | ✗ | 267 lines: Missing FACEPALS refs + palette color line format |
+| All 9 TBLs | **PASS** | Motorola hex format |
+| `IMGPAL.ASM` | **PASS** | Motorola hex, tab spacing |
+| `IMGTBL.ASM` | ✗ | 14 lines: `TROGMOUTH`/`MOUTHBACK`, `.include BGNDTBL.GLO` positioning |
+| `IMGTBL.GLO` | ✗ | 754 lines: needs Motorola hex format |
+| `BGNDTBL.ASM` | ✗ | 4835 lines: BBB handler (HDRS indices, Motorola hex) |
+| `BGNDPAL.ASM` | ✗ | 314 lines: BBB handler (FACEPALS, Motorola hex, tab spacing) |
+| `BGNDTBL.GLO` | ✗ | 180 lines: BBB handler (Motorola hex formatting) |
 | `IMGASEQ.ASM` | MISSING | Not yet generated |
 | `IMGSRC.ASM` | MISSING | Not yet generated |
+
+### Remaining Work
+
+1. **BBB handler → IMGTBL.ASM**: TROGMOUTH/MOUTHBACK should be written to the
+   main TBL file as sprite entries (w/h/anix/aniy/sag/pal), not just to
+   BGNDTBL.ASM. These are face images from TROGFACE.BDD.
+
+2. **BGNDTBL.ASM HDRS indices**: The hdr_idx in BLKS entries differs in
+   sub-module sections. The reference uses a different assignment scheme.
+
+3. **BGNDPAL.ASM FACEPALS**: Missing the FACEPALS reference section
+   (`.long trogcol, PINK16, land`).
+
+4. **IMGTBL.GLO/BGNDTBL.GLO formatting**: Need Motorola hex format for
+   .globl entries, tab-based spacing, and blank line separators.
+
+Format: `/OLD` outputs Motorola hex (`>%X`). Add `/H` for Intel hex (`0%XH`).
 
 ---
 

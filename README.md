@@ -208,19 +208,19 @@ cd build && make test
 | **MK4MIL** | ZON | **PASS** (6/6) | |
 | **MK5MIL** | ZON | **PASS** (7/7) | |
 | **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
-| **MK7MIL** | Mixed | FAIL (10/11) | BGNDTBL.GLO has extra ENDMARKER entry |
+| **MK7MIL** | Mixed | FAIL (10/11) | BGNDTBL.GLO ENDMARKER |
 | **MK8MIL** | FRM | **PASS** (1/1) | |
 | **BB** | ZOF+XON | **PASS** (2/2) | |
 | **BB2** | ZOF+XON | **PASS** (3/3) | |
 | **BB3** | ZOF+PT | **PASS** (2/2) | |
 | **BB4** | ZOF+XON | **PASS** (1/1) | |
-| **BB5** | Mixed | FAIL (6/7) | PLYRDSEQ PT0X sentinel, see `sentinel.md` |
-| **BB6** | Mixed | FAIL (5/6) | PLYRDSQ2 PT fields, see `sentinel.md` |
-| **BB7** | Mixed | FAIL (15/16) | OUTDOOR false dedup (pre-existing ref bug) |
+| **BB5** | Mixed | FAIL (6/7) | PLYRDSEQ PT0X, see `sentinel.md` |
+| **BB6** | Mixed | FAIL (5/6) | PLYRDSQ2, see `sentinel.md` |
+| **BB7** | Mixed | FAIL (15/16) | OUTDOOR (pre-existing ref bug) |
 | **BB8** | XON | **PASS** (3/3) | |
 | **BBMUG** | ZOF+XON | **PASS** (2/2) | |
 | **BBVDA** | VDA | **PASS** (1/1) | |
-| **TROG** | /OLD | FAIL (12/15) | 9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO pass; BBB handler |
+| **TROG** | /OLD | FAIL (10/15) | 9 TBLs + IMGPAL.ASM pass; BBB handler remaining |
 | **NARC1** | /OLD | FAIL (18/21) | RLC encoder format diffs |
 | **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
@@ -234,17 +234,19 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 
 | Issue | Scope | Root Cause |
 |-------|-------|------------|
-| **TROGMOUTH/MOUTHBACK missing** | Trog | BBB handler writes face images to BGNDTBL.ASM; ref expects sprite entries in IMGTBL.ASM |
-| **BGNDTBL.ASM HDRS indices** | Trog | BLKS hdr_idx assignment differs in sub-module sections |
-| **BGNDPAL.ASM FACEPALS** | Trog | Missing FACEPALS reference section (`.long trogcol, PINK16, land`) |
-| **MK7 BGNDTBL.GLO ENDMARKER** | MK7 | ENDMARKER written to current GLO file instead of main IMGTBL.GLO |
-| **BB5 PLYRDSEQ PT0X sentinel** | BB5 | Sentinel value mismatch (-32768 vs -16384), see `sentinel.md` |
-| **BB6 PLYRDSQ2 PT fields** | BB6 | PTTBL field mapping miscalculation |
-| **BB7 OUTDOOR false dedup** | BB7 | Pre-existing LOADW dedup bug (ref has wrong LEAF pixels) |
-| **NARC1 RLC encoder** | Narc | Run-length code format differences vs LOAD.EXE |
-| **CARN TUNG3 dedup collision** | Carn | Word + byte sum + rotating XOR all collide across 722 differing pixels |
+| **TROGMOUTH/MOUTHBACK** | Trog | BBB handler: face images should go to IMGTBL.ASM as sprite entries |
+| **BGNDTBL.ASM HDRS indices** | Trog | BBB handler: BLKS hdr_idx assignment in sub-modules |
+| **BGNDPAL.ASM FACEPALS** | Trog | BBB handler: missing FACEPALS ref section |
+| **IMGTBL.GLO Motorola format** | Trog | GLO entries need Motorola hex and tab spacing |
+| **BGNDTBL.GLO Motorola format** | Trog | GLO entries need Motorola hex |
+| **MK7 BGNDTBL.GLO ENDMARKER** | MK7 | ENDMARKER goes to current GLO not main |
+| **BB5 PLYRDSEQ PT0X** | BB5 | Sentinel value (-32768 vs -16384), see `sentinel.md` |
+| **BB6 PLYRDSQ2 fields** | BB6 | PTTBL field mapping |
+| **BB7 OUTDOOR false dedup** | BB7 | Pre-existing ref bug |
+| **NARC1 RLC encoder** | Narc | RLC format vs LOAD.EXE |
+| **CARN TUNG3 collision** | Carn | Triple-hash collision (722 diff pixels) |
 
-Fixed since v0.91: BB5 cascade (PTTBL UB, 3/7→6/7); section_base_bit (Trog two ***>); +META global cache (cross-section sharing); /OLD IRW header; BBB 8bpp/CMP=0 (Trog 9/9); IMGTBL.GLO/BGNDTBL.GLO formatting; OUT_STRIDE minimum 1 for /OLD; NARC1 0→18/21.
+Fixed since v0.91: BB5 (3/7→6/7), two ***> SAG, +META cache, /OLD IRW/BGNDTBL.GLO formatting, OUT_STRIDE for /OLD, Motorola hex output, IMGPAL.ASM.
 
 ---
 
