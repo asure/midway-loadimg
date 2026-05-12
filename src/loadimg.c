@@ -559,8 +559,8 @@ static ImgFile* img_load(const char *path) {
         /* Old pre-WimpV5 format: 42-byte IMG_REC (pack 1).
          * Convert to normalized 50-byte IMG_REC table.
          * Layout: +0 name[16] +16 xoff(sw) +18 yoff(sw) +20 xsize(w) +22 ysize(w)
-         *         +24 palind(w) +26 flags(w) +28 oset(dd) +32 data(dd)
-         *         +36 lib(sw) +38 pword1(sw) +40 pword2(sw) +42 frame(b) +43 spare(b) */
+         *         +24 palind(b) +25 flags(b) +26 oset(dd) +30 data(dd)
+         *         +34 lib(sw) +36 pword1(sw) +38 pword2(sw) +40 frame(b) +41 spare(b) */
         int n = img->hdr.imgcnt;
         uint32_t old_oset = img->hdr.oset;
         if (n <= 0 || old_oset + (uint32_t)n * 42 > (uint32_t)sz) {
@@ -580,6 +580,7 @@ static ImgFile* img_load(const char *path) {
             r->palnum  = (uint16_t)(o[24]);
             r->flags   = (uint16_t)(o[25]);
             r->oset    = (uint32_t)(o[26]|(o[27]<<8)|(o[28]<<16)|(o[29]<<24));
+            if (r->oset >= (uint32_t)sz) r->oset = 0;
             r->data_p  = (uint32_t)(o[30]|(o[31]<<8)|(o[32]<<16)|(o[33]<<24));
             r->lib     = (uint16_t)(o[34] | (o[35] << 8));
             r->anix2   = (int16_t) (o[36] | (o[37] << 8));
