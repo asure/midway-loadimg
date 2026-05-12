@@ -1758,8 +1758,9 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         ie->aniy = rec->aniy;
         ie->w = OUT_STRIDE(rec->w);
         ie->h = rec->h;
-        /* TBL SIZX/SIZY: LOADW outputs rec->w/rec->h (with XON) regardless of PTTBL compression width */
-        ie->sizx = OUT_STRIDE(rec->w);
+        /* TBL SIZX/SIZY: LOADW outputs rec->w/rec->h (with XON) regardless of PTTBL compression width.
+         * LOAD.EXE 4.65 (/OLD2) uses stride-aligned width. */
+        ie->sizx = (g.old_mode == 2) ? IMG_STRIDE(rec->w) : OUT_STRIDE(rec->w);
         ie->sizy = rec->h;
         if (g.xon) { ie->sizx = OUT_STRIDE(rec->w + 1); ie->sizy++; }
         if (ie->sizx < 1) ie->sizx = 1;
@@ -1972,14 +1973,14 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              uint16_t ck2 = 0;
              for (int i = 0; i < pix_bytes; i++)
                  ck2 = (uint16_t)(ck2 + pix_data[i]);
-            for (int di = 0; di < n_dedup; di++) {
-                if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
-                    dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
-                    dedup_table[di].ctrl == cp.ctrl &&
-                    dedup_table[di].sum2 == ck2) {
-                    dedup_idx = di; break;
-                }
-            }
+             for (int di = 0; di < n_dedup; di++) {
+                 if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
+                     dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
+                     dedup_table[di].ctrl == cp.ctrl &&
+                     dedup_table[di].sum2 == ck2) {
+                     dedup_idx = di; break;
+                 }
+             }
         }
 
           if (cache_hit) {
@@ -1989,7 +1990,12 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
           } else if (dedup_idx >= 0) {
               ie->sag = dedup_table[dedup_idx].sag;
               if (g.verbose)
-                  printf("  Checksum match on image [%s].\n", name);
+                  printf("  Checksum match on image [%s] (dedup[%d]: sum=0x%04X max=0x%04X "
+                         "sizx=%d sizy=%d ctrl=0x%04X sum2=0x%04X)\n",
+                         name, dedup_idx,
+                         dedup_table[dedup_idx].sum, dedup_table[dedup_idx].max_val,
+                         dedup_table[dedup_idx].sizx, dedup_table[dedup_idx].sizy,
+                         dedup_table[dedup_idx].ctrl, dedup_table[dedup_idx].sum2);
           } else {
               ie->sag = encode_image(cur->imgfile, rec, &cp, bpp & 0xff);
               /* Cache final TBL SAG (base + relative) for same-suffix reuse.
@@ -2016,9 +2022,9 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 dedup_table[n_dedup].ctrl = cp.ctrl;
                 dedup_table[n_dedup].sag = ie->sag;
                 dedup_table[n_dedup].sag_idx = -1;
-                if (g.verbose && n_dedup == 1020)
-                    printf("  DEDUP_ADD[1020] %s: ck=%u ck2=%u max=%u sizx=%d sizy=%d ctrl=0x%04x sag=%u\n",
-                           name, dedup_table[n_dedup].sum, dedup_table[n_dedup].sum2,
+                if (g.verbose && n_dedup < 64)
+                    printf("  DEDUP_ADD[%d] %s: ck=0x%04X ck2=0x%04X max=0x%04X sizx=%d sizy=%d ctrl=0x%04x sag=%u\n",
+                           n_dedup, name, dedup_table[n_dedup].sum, dedup_table[n_dedup].sum2,
                            dedup_table[n_dedup].max_val,
                            dedup_table[n_dedup].sizx, dedup_table[n_dedup].sizy,
                            dedup_table[n_dedup].ctrl, dedup_table[n_dedup].sag);
@@ -3202,7 +3208,7 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    if (g.old_mode == 1) g.dedup = 0;  /* /OLD: LOAD.EXE 4.50 has no CON> dedup */
+    if (g.old_mode) g.dedup = 0;  /* /OLD: LOAD.EXE has no CON> dedup by default */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
 
