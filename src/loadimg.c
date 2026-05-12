@@ -1987,10 +1987,11 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       dedup_table[di].sum2 == ck2 &&
                       dedup_table[di].anix == rec->anix &&
                      (g.old_mode == 2 || dedup_table[di].aniy == rec->aniy)) {
-                      /* Verify with byte-per-byte comparison */
-                      if (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
-                          dedup_table[di].pix_h == rec->h &&
-                          memcmp(dedup_table[di].pix, pix_data, (size_t)pstride * rec->h) == 0) {
+                      /* Verify with byte-per-byte comparison (skip for /OLD to avoid stale ptrs) */
+                      if (g.old_mode == 2 ?
+                          (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
+                           dedup_table[di].pix_h == rec->h &&
+                           memcmp(dedup_table[di].pix, pix_data, (size_t)pstride * rec->h) == 0) : 1) {
                           dedup_idx = di; break;
                       }
                   }
@@ -3228,7 +3229,7 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: LOAD.EXE 4.50 has no CON> dedup by default */
+    /* /OLD: dedup enabled by default (LOAD.EXE uses checksum-based dedup) */
     /* /OLD2 (LOAD.EXE 4.65): dedup on with per-line scoping + ANIX/ANIY + memcmp verification */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
