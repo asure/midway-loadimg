@@ -181,12 +181,12 @@ Each compressed row: 1 header byte `[trail_n:4][lead_n:4]` + stored pixels at `b
 
 ## The LOD/IMG Pipeline
 
-1. **LOD Parsing** — Text script with directives (`ZON>`, `ZOF>`, `CON>`, `COF>`, `PPP>`, `XON>`, `ASM>`, `GLO>`, `***>`, `FRM>`, `BBB>`, `---->`) controlling compression mode, dedup, bpp, and image selection.
+1. **LOD Parsing** — Text script with directives (`ZON>`, `ZOF>`, `CON>`, `COF>`, `PPP>`, `XON>`, `ASM>`, `GLO>`, `***>`, `FRM>`, `BBB>`, `--->`) controlling compression mode, dedup, bpp, and image selection.
 
 2. **IMG Loading** — Binary container with `LIB_HDR` (28 bytes), `IMG_REC` records (50 bytes each, 42 for old format), `PAL_REC` records (26 bytes), optional SEQ/SCR blocks, and PTTBL (point table) entries (40 bytes each). Pixel data is 8-bit indexed, row-stride aligned to 4 bytes.
 
 3. **Two-Pass Encoding**:
-   - **Pass 1** (`scan_bpp`): scans all `---->` image lists to determine global bpp (max pixel value), respecting `PPP>` override.
+   - **Pass 1** (`scan_bpp`): scans all `--->` image lists to determine global bpp (max pixel value), respecting `PPP>` override.
    - **Pass 2** (`process_lod`): for each image, analyzes the compression window (SIZX from PTTBL or image width), selects LM/TM multipliers via error-minimizing analysis (reverse-engineered from `FUN_1000_6f20`), encodes rows, writes TBL entries and palette data, and handles dedup (`CON>/COF>`) and `FRM>`/`BBB>` directives.
 
 4. **IRW Writing** — Flushes the bit-packed header and data to disk.

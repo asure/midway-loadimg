@@ -256,7 +256,7 @@ Pixels are packed directly: `bpp` bits each, LSB first, no row header. No lead/t
 
 ## Multi-Scale Encoding
 
-Each image can have 1–4 LOD scales (full, ½, ¼, ⅛). Controlled by `*N` suffix in LOD `---->` lines.
+Each image can have 1–4 LOD scales (full, ½, ¼, ⅛). Controlled by `*N` suffix in LOD `--->` lines.
 
 - Scale 0 (full): encoded with ZON compression using the analyzed LM/TM multipliers
 - Scale 1 (half): subsampled then encoded with ZON compression using BOX[2] parameters
@@ -291,7 +291,7 @@ LOD files are text scripts processed line by line. Lines beginning with `;` or `
 | `IHDR field:size,...` | Define image header field layout |
 | `FRM> name` | Load `.BIN` file (compressed movie footage), write raw bytes to IRW |
 | `filename.IMG` | Load IMG container file |
-| `----> name[:hex][*N],...` | Process named images from current IMG |
+| `---> name[:hex][*N],...` | Process named images from current IMG |
 | `BBB> name` | Load BLIMP background (`.BDB` + `.BDD` files) |
 
 ### IHDR Fields
@@ -402,7 +402,7 @@ Output filenames are derived from the LOD file's base name (uppercased):
 
 ### Processing Pipeline
 
-1. **scan_bpp pass** — reads all `---->` image lists, computes global max pixel value → global bpp. Respects `PPP>` override.
+1. **scan_bpp pass** — reads all `--->` image lists, computes global max pixel value → global bpp. Respects `PPP>` override.
 2. **process_lod pass** — for each image: analyze compression window (SIZX from PTTBL), choose LM/TM multipliers, encode all rows to IRW bitstream, write TBL entry, write palette if needed. Also processes `FRM>` and `BBB>` directives inline.
 3. **write_irw** — flush IRW header + bit-packed data to file.
 
@@ -440,7 +440,7 @@ entry 0 (!STAND2) is accessed via `pttbls0 = pal_end + 6` (always actual PTTBL s
 When a TBL diff shows a mismatching SAG, the compressed size of the **image before it** (in the IRW stream, i.e. the preceding image in the LOD's processing order) differs. To find the root cause:
 
 1. Find the first line in the TBL where SAG or CTRL differs — this is the first image whose encoding diverges.
-2. Look backward in the LOD file for the `---->` line containing this image's name. Check its compression mode (`ZON>`/`ZOF>`), `PPP>` bpp override, and any toggles (`XON>`, etc.).
+2. Look backward in the LOD file for the `--->` line containing this image's name. Check its compression mode (`ZON>`/`ZOF>`), `PPP>` bpp override, and any toggles (`XON>`, etc.).
 3. If the SAG is wrong but the CTRL matches, the preceding image's compressed size differs (same LM/TM but different pixel data output — checked the per-row lead/trail encoding).
 4. If the CTRL itself differs, the LM/TM selection (FUN_1000_6f20) or bpp computation diverged for this image. Check `PPP>` / auto bpp, and compare `lead_err`/`trail_err` accumulator values against LOADW's verbose output (`/V5` under DOSBox).
 

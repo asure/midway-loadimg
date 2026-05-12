@@ -76,10 +76,10 @@ all-ZOF tests (MK3MIL, BB, BB2, BB4, BB8) pass 100%.
 
 ### Two-Pass Encoding
 
-1. **Pass 1** (`scan_bpp` at src/loadimg.c:1997): scans all `---->` image lists
+1. **Pass 1** (`scan_bpp` at src/loadimg.c:1997): scans all `--->` image lists
    to determine global bpp (max pixel value), respecting `PPP>` override.
 
-2. **Pass 2** (`process_lod` at src/loadimg.c:2084): for each `---->` image:
+2. **Pass 2** (`process_lod` at src/loadimg.c:2084): for each `--->` image:
    - Determine per-image bpp (PPP override, auto pixel packing, or global bpp)
    - Compute compression window SIZX from PTTBL or `OUT_STRIDE(rec->w)`
    - **`analyze_image()`** → selects LM/TM multipliers via FUN_1000_6f20
@@ -334,7 +334,7 @@ diff ../refArt/PLYRSEQ2.TBL PLYRSEQ2.TBL | head -40
 
 ```bash
 # Find which image comes before the cascade start in the LOD
-grep -n '---->' workArt/BB5.LOD | head -30
+grep -n '--->' workArt/BB5.LOD | head -30
 ```
 
 ### Step 4: Extract verbose debug output for the diverging image

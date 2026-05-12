@@ -79,7 +79,7 @@ Some `+META` entries referenced a base name that did **not exist** in any IMG
 file. Example from `TROG.LOD` line 294:
 
 ```
-----> BLOOVHAND1+VHAND1L,BLOOVHAND2+VHAND2L
+---> BLOOVHAND1+VHAND1L,BLOOVHAND2+VHAND2L
 ```
 
 - `BLOOVHAND1+VHAND1L` → base name `BLOOVHAND1` → found in `TROGPLAY.IMG`

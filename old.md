@@ -101,7 +101,7 @@ The encoder (`rlc_encode` in `src/loadimg.c`):
 The `RLC>` directive toggles RLC encoding on/off in the LOD file:
 ```
 RLC>            ; enable RLC
-----> img1,img2  ; these use RLC encoding
+---> img1,img2  ; these use RLC encoding
 RLC>            ; disable RLC
 ```
 
@@ -109,9 +109,9 @@ RLC>            ; disable RLC
 
 ## +META Variant Names (Trog)
 
-Trog `---->` lines use a `NAME+META` syntax:
+Trog `--->` lines use a `NAME+META` syntax:
 ```
-----> SPSTP0+STP0L,SPWAP4F1
+---> SPSTP0+STP0L,SPWAP4F1
 ```
 
 The `+STP0L` suffix is a **display modifier** — it provides alternate display
@@ -123,14 +123,14 @@ parameters (animation frame metadata) for the base image. LOAD.EXE:
 
 ### Suffix Sharing
 
-`+META` entries with the **same suffix on the same `---->` line** share a
+`+META` entries with the **same suffix on the same `--->` line** share a
 single SAG (size 0 for all but the first). Example:
 ```
-----> GWENHL1+GHL1L,GWENHC1+GHL1L,GWENHC2+GHL1L,GWENHU1+GHL1L
+---> GWENHL1+GHL1L,GWENHC1+GHL1L,GWENHC2+GHL1L,GWENHU1+GHL1L
 ```
 All four use `+GHL1L`. Only `GWENHL1` is encoded; the other three reuse its SAG.
 
-`+META` entries with the **same suffix on DIFFERENT `---->` lines** each encode
+`+META` entries with the **same suffix on DIFFERENT `--->` lines** each encode
 independently (different lines → different source IMG files → different pixel
 data).
 
