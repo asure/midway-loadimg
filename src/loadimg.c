@@ -1979,7 +1979,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              uint16_t ck2 = 0;
              for (int i = 0; i < pix_bytes; i++)
                  ck2 = (uint16_t)(ck2 + pix_data[i]);
-              for (int di = line_dedup_start; di < n_dedup; di++) {
+              for (int di = 0; di < n_dedup; di++) {
                   if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
                       dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
                       dedup_table[di].ctrl == cp.ctrl &&
