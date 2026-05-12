@@ -432,6 +432,8 @@ typedef struct {
     int16_t anix, aniy;          /* animation offsets (LOAD.EXE 4.65 includes in dedup key) */
     uint32_t sag;
     int sag_idx;
+    uint8_t *pix;                /* pixel data pointer (for byte-per-byte verification) */
+    int pix_stride, pix_h;       /* stride and height for memcmp */
 } DedupEntry;
 static DedupEntry dedup_table[MAX_DEDUP];
 static int n_dedup = 0;
@@ -1977,15 +1979,20 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              uint16_t ck2 = 0;
              for (int i = 0; i < pix_bytes; i++)
                  ck2 = (uint16_t)(ck2 + pix_data[i]);
-             for (int di = line_dedup_start; di < n_dedup; di++) {
-                 if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
-                     dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
-                     dedup_table[di].ctrl == cp.ctrl &&
-                     dedup_table[di].sum2 == ck2 &&
-                     dedup_table[di].anix == rec->anix && dedup_table[di].aniy == rec->aniy) {
-                     dedup_idx = di; break;
-                 }
-             }
+              for (int di = line_dedup_start; di < n_dedup; di++) {
+                  if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
+                      dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
+                      dedup_table[di].ctrl == cp.ctrl &&
+                      dedup_table[di].sum2 == ck2 &&
+                      dedup_table[di].anix == rec->anix && dedup_table[di].aniy == rec->aniy) {
+                      /* Verify with byte-per-byte comparison */
+                      if (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
+                          dedup_table[di].pix_h == rec->h &&
+                          memcmp(dedup_table[di].pix, pix_data, (size_t)pstride * rec->h) == 0) {
+                          dedup_idx = di; break;
+                      }
+                  }
+              }
         }
 
           if (cache_hit) {
@@ -2027,6 +2034,9 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 dedup_table[n_dedup].ctrl = cp.ctrl;
                 dedup_table[n_dedup].anix = rec->anix;
                 dedup_table[n_dedup].aniy = rec->aniy;
+                dedup_table[n_dedup].pix = pix_data;
+                dedup_table[n_dedup].pix_stride = pstride;
+                dedup_table[n_dedup].pix_h = rec->h;
                 dedup_table[n_dedup].sag = ie->sag;
                 dedup_table[n_dedup].sag_idx = -1;
                 if (g.verbose && n_dedup < 64)
@@ -3215,7 +3225,8 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    if (g.old_mode) g.dedup = 0;  /* /OLD: LOAD.EXE has no CON> dedup by default */
+    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: LOAD.EXE 4.50 has no CON> dedup */
+    /* /OLD2 (LOAD.EXE 4.65): dedup on with per-line scoping + ANIX/ANIY + memcmp verification */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
 
