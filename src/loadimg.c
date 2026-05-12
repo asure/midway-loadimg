@@ -429,6 +429,7 @@ typedef struct {
     uint16_t sum, max_val, sum2;  /* word sum + byte sum for collision disambiguation */
     int sizx, sizy;
     uint16_t ctrl;
+    int16_t anix, aniy;          /* animation offsets (LOAD.EXE 4.65 dedup key) */
     uint32_t sag;
     int sag_idx;
 } DedupEntry;
@@ -558,8 +559,8 @@ static ImgFile* img_load(const char *path) {
         /* Old pre-WimpV5 format: 42-byte IMG_REC (pack 1).
          * Convert to normalized 50-byte IMG_REC table.
          * Layout: +0 name[16] +16 xoff(sw) +18 yoff(sw) +20 xsize(w) +22 ysize(w)
-         *         +24 palind(b) +25 flags(b) +26 oset(dd) +30 data(dd)
-         *         +34 lib(sw) +36 pword1(sw) +38 pword2(sw) +40 frame(b) +41 spare(b) */
+         *         +24 palind(w) +26 flags(w) +28 oset(dd) +32 data(dd)
+         *         +36 lib(sw) +38 pword1(sw) +40 pword2(sw) +42 frame(b) +43 spare(b) */
         int n = img->hdr.imgcnt;
         uint32_t old_oset = img->hdr.oset;
         if (n <= 0 || old_oset + (uint32_t)n * 42 > (uint32_t)sz) {
@@ -1588,6 +1589,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
      * LOADW skips duplicate name references in ---> lines. */
     static char seen_names[4096][64];
     static int n_seen = 0;
+    static int line_dedup_start = 0;
     /* Use imgpath (file path string) for identity, not the ImgFile pointer
      * which may be recycled by calloc after free. */
     static char last_imgpath[MAX_PATH] = "";
@@ -1596,6 +1598,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
         strncpy(last_imgpath, cur->imgpath, MAX_PATH-1);
         last_imgpath[MAX_PATH-1] = 0;
     }
+    line_dedup_start = n_dedup;
     /* +META suffix cache: GLOBAL — same suffix = same SAG across entire LOD.
      * The +META modifier is a display parameter, independent of which IMG
      * provides the base image (e.g., ELSTP0+STP0L shares SPSTP0+STP0L's SAG). */
@@ -1973,11 +1976,12 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
              uint16_t ck2 = 0;
              for (int i = 0; i < pix_bytes; i++)
                  ck2 = (uint16_t)(ck2 + pix_data[i]);
-             for (int di = 0; di < n_dedup; di++) {
+             for (int di = line_dedup_start; di < n_dedup; di++) {
                  if (dedup_table[di].sum == ck && dedup_table[di].max_val == max_val &&
                      dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
                      dedup_table[di].ctrl == cp.ctrl &&
-                     dedup_table[di].sum2 == ck2) {
+                     dedup_table[di].sum2 == ck2 &&
+                     dedup_table[di].anix == rec->anix && dedup_table[di].aniy == rec->aniy) {
                      dedup_idx = di; break;
                  }
              }
@@ -2020,6 +2024,8 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                 dedup_table[n_dedup].sizx = cp.sizx;
                 dedup_table[n_dedup].sizy = cp.sizy;
                 dedup_table[n_dedup].ctrl = cp.ctrl;
+                dedup_table[n_dedup].anix = rec->anix;
+                dedup_table[n_dedup].aniy = rec->aniy;
                 dedup_table[n_dedup].sag = ie->sag;
                 dedup_table[n_dedup].sag_idx = -1;
                 if (g.verbose && n_dedup < 64)
