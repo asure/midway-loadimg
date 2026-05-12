@@ -1985,8 +1985,8 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
                       dedup_table[di].ctrl == cp.ctrl &&
                       dedup_table[di].sum2 == ck2 &&
-                      dedup_table[di].anix == rec->anix &&
-                     (g.old_mode == 2 || dedup_table[di].aniy == rec->aniy)) {
+                      (!g.old_mode || dedup_table[di].anix == rec->anix) &&
+                     (g.old_mode == 0 || g.old_mode == 2 || dedup_table[di].aniy == rec->aniy)) {
                       /* Verify with byte-per-byte comparison (skip for /OLD to avoid stale ptrs) */
                       if (g.old_mode == 2 ?
                           (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
