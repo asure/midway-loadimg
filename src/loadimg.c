@@ -429,7 +429,7 @@ typedef struct {
     uint16_t sum, max_val, sum2;  /* word sum + byte sum for collision disambiguation */
     int sizx, sizy;
     uint16_t ctrl;
-    int16_t anix, aniy;          /* animation offsets (LOAD.EXE 4.65 dedup key) */
+    int16_t anix, aniy;          /* animation offsets (LOAD.EXE 4.65 includes in dedup key) */
     uint32_t sag;
     int sag_idx;
 } DedupEntry;
@@ -1590,7 +1590,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
      * LOADW skips duplicate name references in ---> lines. */
     static char seen_names[4096][64];
     static int n_seen = 0;
-    static int line_dedup_start = 0;
+    static int line_dedup_start = 0;  /* per-line dedup scope */
     /* Use imgpath (file path string) for identity, not the ImgFile pointer
      * which may be recycled by calloc after free. */
     static char last_imgpath[MAX_PATH] = "";
