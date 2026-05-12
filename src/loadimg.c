@@ -1984,7 +1984,7 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
                       dedup_table[di].ctrl == cp.ctrl &&
                       dedup_table[di].sum2 == ck2 &&
-                      dedup_table[di].anix == rec->anix && dedup_table[di].aniy == rec->aniy) {
+                      dedup_table[di].anix == rec->anix) {
                       /* Verify with byte-per-byte comparison */
                       if (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
                           dedup_table[di].pix_h == rec->h &&
