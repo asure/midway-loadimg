@@ -1988,20 +1988,27 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       dedup_table[di].sum2 == ck2 &&
                       (!g.old_mode || dedup_table[di].anix == rec->anix) &&
                      (g.old_mode == 0 || g.old_mode == 2 || dedup_table[di].aniy == rec->aniy)) {
-                       /* Verify with byte-per-byte comparison
-                        * For /OLD2: always use memcmp
-                        * For /OLD1 and modern: use memcmp only if IMG data is still current */
+                       /* Verify with byte-per-byte comparison.
+                        * Modern mode: allow checksum-only dedup when pix is NULL (original behavior).
+                        * /OLD modes: require memcmp — skip on stale pointers (IMG buffer realloc'd). */
                        {
-                           /* Require stride/h matching + memcmp for dedup. Skip on stale pointers. */
-                           int can_dedup = (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
-                                            dedup_table[di].pix_h == rec->h);
-                           if (can_dedup) {
-                               int pix_stale = (g.old_mode && dedup_table[di].img_data &&
-                                                cur->imgfile && dedup_table[di].img_data != cur->imgfile->data);
-                               if (!pix_stale &&
-                                   memcmp(dedup_table[di].pix, pix_data, (size_t)pstride * rec->h) == 0) {
-                                   dedup_idx = di; break;
+                           int dedup_match = 0;
+                           if (g.old_mode) {
+                               /* /OLD: require stride/h matching + memcmp */
+                               if (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
+                                   dedup_table[di].pix_h == rec->h) {
+                                   int pix_stale = (dedup_table[di].img_data &&
+                                                    cur->imgfile && dedup_table[di].img_data != cur->imgfile->data);
+                                   if (!pix_stale &&
+                                       memcmp(dedup_table[di].pix, pix_data, (size_t)pstride * rec->h) == 0)
+                                       dedup_match = 1;
                                }
+                           } else {
+                               /* Modern: checksum-only (original LOADW behavior, no memcmp needed) */
+                               dedup_match = 1;
+                           }
+                           if (dedup_match) {
+                               dedup_idx = di; break;
                            }
                        }
                    }
@@ -3244,7 +3251,7 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    if (g.old_mode == 1) g.dedup = 0;      if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: most LOAD.EXE 4.50 builds lack sprite dedup */
+    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: most LOAD.EXE 4.50 builds lack sprite dedup */
     /* /OLD2 (LOAD.EXE 4.65): dedup on with per-line scoping + ANIX/ANIY + memcmp verification */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
