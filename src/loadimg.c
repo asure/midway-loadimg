@@ -3030,9 +3030,13 @@ static void process_lod(const char *lod_path) {
         if (tf) {
             fseek(tf, 0, SEEK_END);
             fprintf(tf, "\t.TEXT\r\n");
-            fputc(0x1a, tf);
-            fprintf(tf, "\r\n");
-            fputc(0x1a, tf);
+            if (g.old_mode == 2) {
+                fputc(0x1a, tf);
+                fprintf(tf, "\r\n");
+                fputc(0x1a, tf);
+            } else if (!g.old_mode) {
+                fputc(0x1a, tf);
+            }
             fclose(tf);
         }
     }
@@ -3229,7 +3233,7 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    /* /OLD: dedup enabled by default (LOAD.EXE uses checksum-based dedup) */
+    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: most LOAD.EXE 4.50 builds lack sprite dedup */
     /* /OLD2 (LOAD.EXE 4.65): dedup on with per-line scoping + ANIX/ANIY + memcmp verification */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
@@ -3401,9 +3405,13 @@ int main(int argc, char *argv[]) {
 
     if (g.asm_fp) {
         fprintf(g.asm_fp, "\t.TEXT\r\n");
-        fputc(0x1a, g.asm_fp);
-        fprintf(g.asm_fp, "\r\n");
-        fputc(0x1a, g.asm_fp);
+        if (g.old_mode == 2) {
+            fputc(0x1a, g.asm_fp);
+            fprintf(g.asm_fp, "\r\n");
+            fputc(0x1a, g.asm_fp);
+        } else if (!g.old_mode) {
+            fputc(0x1a, g.asm_fp);
+        }
         fclose(g.asm_fp);
     }
     if (g.glo_fp) fclose(g.glo_fp);
