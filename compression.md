@@ -11,11 +11,16 @@ for the DMA2 zero-run compression algorithm used in **Mortal Kombat 2** data.
 
 | Offset | Size | Field |
 |--------|------|-------|
-| 0x00 | 8 | ASCII date string (e.g. `"03/14/95"`) |
-| 0x20 | 2 | Image count (LE uint16) |
-| 0x22 | 1 | Global bpp (max across all images) |
-| 0x2e | 1 | Flags (0x02) |
-| 0x30 | 4 | Total file size (LE uint32) |
+| 0x00 | 8 | ASCII date string, NUL-padded (e.g. `"03/14/95"`) |
+| 0x08 | 24 | Reserved (zero-filled) |
+| 0x20 | 4 | Magic — always `0x00640194` (LE) |
+| 0x24 | 8 | Reserved (zero-filled) |
+| 0x2C | 4 | ROM address (LE) |
+| 0x30 | 4 | Data size — payload byte count, header-exclusive (LE) |
+| 0x34 | 4 | Checksum — sum of uint16 LE words in payload, truncated 32-bit; trailing odd byte discarded |
+| 0x38 | 4 | Constant — always `0x00000004` |
+| 0x3C | 2 | Type/flags — `0x0000`, `0x0001`, `0x0002`, or `0xFFFF` |
+| 0x3E | 6 | Reserved (zero-filled) |
 
 Data section starts at offset 0x44. Images are sequentially bit-packed with no
 delimiters. SAG values in the TBL are bit offsets relative to the start of the

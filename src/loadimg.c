@@ -3020,18 +3020,12 @@ static void process_lod(const char *lod_path) {
 static void write_irw(const char *path) {
     uint8_t hdr[IRW_HDR_SIZE];
     memset(hdr, 0, sizeof(hdr));
-    if (g.old_mode == 2) {
-        strncpy((char*)hdr, "4.65 9/3/91", 12);
-    } else if (g.old_mode == 1) {
-        strncpy((char*)hdr, "4.50 4/27/90", 12);
-    } else {
-        strncpy((char*)hdr, IRW_DATE_STR, strlen(IRW_DATE_STR));
-    }
+    strncpy((char*)hdr, IRW_DATE_STR, 8);
 
     uint32_t data_bytes = (g.irw_bit + 7) / 8;
-    /* n_images at 0x20 (uint16 LE) */
-    hdr[0x20] = (uint8_t)((g.n_images >> 0) & 0xff);
-    hdr[0x21] = (uint8_t)((g.n_images >> 8) & 0xff);
+    /* magic constants at 0x20-0x23 */
+    hdr[0x20] = 0x94; hdr[0x21] = 0x01;  /* 0x0194 */
+    hdr[0x22] = 0x64; hdr[0x23] = 0x00;  /* 0x0064 */
     /* base_addr from ***> at 0x2C (uint32 LE) */
     uint32_t base = g.base_addr;
     if (g.dual_bank) {
@@ -3042,12 +3036,29 @@ static void write_irw(const char *path) {
     hdr[0x2D] = (uint8_t)((base >> 8) & 0xff);
     hdr[0x2E] = (uint8_t)((base >> 16) & 0xff);
     hdr[0x2F] = (uint8_t)((base >> 24) & 0xff);
-    /* data size at 0x30 (uint32 LE) */
-    uint32_t total_size = IRW_HDR_SIZE + data_bytes;
-    hdr[0x30] = (uint8_t)(total_size & 0xff);
-    hdr[0x31] = (uint8_t)((total_size >> 8) & 0xff);
-    hdr[0x32] = (uint8_t)((total_size >> 16) & 0xff);
-    hdr[0x33] = (uint8_t)((total_size >> 24) & 0xff);
+    /* data section size at 0x30 (uint32 LE, header-exclusive) */
+    hdr[0x30] = (uint8_t)(data_bytes & 0xff);
+    hdr[0x31] = (uint8_t)((data_bytes >> 8) & 0xff);
+    hdr[0x32] = (uint8_t)((data_bytes >> 16) & 0xff);
+    hdr[0x33] = (uint8_t)((data_bytes >> 24) & 0xff);
+    /* uint16 LE sum checksum at 0x34 (discard trailing odd byte) */
+    {
+        uint32_t sum = 0;
+        for (uint32_t i = 0; i + 1 < data_bytes; i += 2) {
+            uint16_t w = (uint16_t)g.irw_data[i] | ((uint16_t)g.irw_data[i + 1] << 8);
+            sum = (sum + w) & 0xFFFFFFFF;
+        }
+        hdr[0x34] = (uint8_t)(sum & 0xff);
+        hdr[0x35] = (uint8_t)((sum >> 8) & 0xff);
+        hdr[0x36] = (uint8_t)((sum >> 16) & 0xff);
+        hdr[0x37] = (uint8_t)((sum >> 24) & 0xff);
+    }
+    /* always 4 at 0x38 */
+    hdr[0x38] = 0x04;
+    /* flags at 0x3C (0xFFFF for /OLD, 0 otherwise) */
+    if (g.old_mode) {
+        hdr[0x3C] = 0xFF; hdr[0x3D] = 0xFF;
+    }
 
     FILE *f = fopen(path, "wb");
     if (!f) die("cannot create IRW file: %s", path);
@@ -3055,6 +3066,26 @@ static void write_irw(const char *path) {
         fwrite(hdr, 1, sizeof(hdr), f);
     fwrite(g.irw_data, 1, data_bytes, f);
     fclose(f);
+
+    {
+        uint32_t magic = (uint32_t)hdr[0x20] | ((uint32_t)hdr[0x21]<<8)
+                       | ((uint32_t)hdr[0x22]<<16) | ((uint32_t)hdr[0x23]<<24);
+        uint32_t dsize = (uint32_t)hdr[0x30] | ((uint32_t)hdr[0x31]<<8)
+                       | ((uint32_t)hdr[0x32]<<16) | ((uint32_t)hdr[0x33]<<24);
+        uint32_t cksum = (uint32_t)hdr[0x34] | ((uint32_t)hdr[0x35]<<8)
+                       | ((uint32_t)hdr[0x36]<<16) | ((uint32_t)hdr[0x37]<<24);
+        uint32_t f38   = (uint32_t)hdr[0x38] | ((uint32_t)hdr[0x39]<<8)
+                       | ((uint32_t)hdr[0x3A]<<16) | ((uint32_t)hdr[0x3B]<<24);
+        uint32_t f3c   = (uint32_t)hdr[0x3C] | ((uint32_t)hdr[0x3D]<<8);
+        printf("Size: %u bytes\n", IRW_HDR_SIZE + data_bytes);
+        printf("Version: %.8s\n", (char*)hdr);
+        printf("Magic: 0x%08X\n", magic);
+        printf("Addr:  0x%08X\n", base);
+        printf("Dsize: %u (actual payload: %u)\n", dsize, data_bytes);
+        printf("Cksum: 0x%08X\n", cksum);
+        printf("0x38:  0x%08X\n", f38);
+        printf("0x3C:  0x%04X\n", f3c);
+    }
 
     if (g.verbose)
         printf("Wrote IRW: %s (%u bytes data, %u bits)%s\n",

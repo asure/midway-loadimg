@@ -184,14 +184,18 @@ The IRW is the output container for compressed (or uncompressed) GSP image data.
 
 ### Header (0x44 bytes)
 
-| Offset | Content |
-|--------|---------|
-| 0x00   | ASCII date string (e.g. `"03/14/95"`) |
-| 0x20   | image count low byte |
-| 0x21   | image count high byte |
-| 0x22   | global bpp |
-| 0x2e   | `0x02` |
-| 0x30–0x33 | total file size (little-endian uint32) |
+| Offset | Size | Field | Notes |
+|--------|------|-------|-------|
+| `0x00` | 8 | Date string | ASCII date, NUL-padded (e.g. `"03/14/95"`) |
+| `0x08` | 24 | Reserved | Zero-filled |
+| `0x20` | 4 | Magic | Always `0x00640194` (little-endian) |
+| `0x24` | 8 | Reserved | Zero-filled |
+| `0x2C` | 4 | ROM address | Target ROM address (little-endian) |
+| `0x30` | 4 | Data size | Payload byte count, header-exclusive (little-endian) |
+| `0x34` | 4 | Checksum | Sum of all uint16 LE words in payload, truncated to 32 bits. Trailing odd byte discarded. |
+| `0x38` | 4 | Constant | Always `0x00000004` |
+| `0x3C` | 2 | Type/flags | `0x0000`, `0x0001`, `0x0002`, or `0xFFFF` |
+| `0x3E` | 6 | Reserved | Zero-filled |
 
 ### Data Section (from offset 0x44)
 
@@ -791,7 +795,7 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 40. **PTTBL shared entry signed arithmetic (v0.95)** — `&pttbls[pttblnum-2]` for `pttblnum<2` is undefined behavior (negative array index). Replaced with `ptrdiff_t` offset-from-file-base arithmetic. Fixes BB5 CMP=1 cascade (3/7->6/7).
 41. **section_base_bit for continuous IRW (v0.95)** — Instead of resetting `g.irw_bit=0` at each `***>` directive, saves current bit position. Fixes SAG with two `***>` sections in Trog.
 42. **+META cache stores final TBL SAG (v0.95)** — Global cache stores `base_addr + relative_offset`, so cross-section hits get correct base address.
-43. **/OLD IRW header format (v0.95)** — Uses `"4.50 4/27/90"` version string, stores base address at offset 0x2C. The IHDR> directive now fully controls field ordering, grouping (`:W` fields share `.word` lines, `:L` fields get their own line), and formatting (CTRL as hex, others as decimal). Fixes line grouping when PAL:L is skipped via `POF>`.
+43. **IRW header format update (v0.97)** — All IRW files now use the same 0x44-byte header: `"03/14/95"` version string, `0x00640194` magic at 0x20, ROM address at 0x2C, data-only size at 0x30, uint16 LE sum checksum at 0x34 (trailing odd byte discarded), `0x00000004` at 0x38, flags at 0x3C. See `irw-header.md` for the full spec.
 
 ### COF and CON Directives
 
