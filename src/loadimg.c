@@ -22,7 +22,7 @@
 #include <ctype.h>
 #include <math.h>
 
-#define VERSION "0.95"
+#define VERSION "0.96"
 
 #ifdef _WIN32
 #include <direct.h>
