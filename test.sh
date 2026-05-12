@@ -79,7 +79,33 @@ test_lod worktrog reftrog TROG "TROGDDAT TROGENEM TROGSPRG TROGWHL TROGTEXT TROG
 test_lod worknarc refnarc NARC1 "NARC1IMG NARCBON NARCBUG NARCCAD NARCCHOP NARCDOG NARCDUMP NARCENT NARCGANG NARCHEAD NARCHOOK NARCHYPO NARCLAB NARCLOAF NARCLOWN NARCMBIG NARCMUGS NARCPIMP NARCPLAY NARCPORS NARCRAMB NARCTEXT" "/OLD"
 
 # workcarn: Total Carnage /OLD2 mode (LOADE.EXE 4.65)
-test_lod workcarn refcarn CARN "AKHBBOSS FINGRNT HBASE JEEP JET ORCUS PLYR RACKUP SHAWN TEXT THROW TITLE WARP" "/OLD2"
+test_lod_workcarn() {
+    local REFDIR="refcarn" LODNAME="CARN"
+    cd "$BASE/workcarn" 2>/dev/null || { echo "  SKIP CARN: no workcarn"; return; }
+    rm -f "$LODNAME.IRW" *.TBL IMGTBL.ASM IMGTBL.GLO IMGPAL.ASM BGND*.ASM BGND*.GLO 2>/dev/null
+    if ! timeout 180 "$TOOL" "$LODNAME.LOD" /T /H /OLD2 /I=workcarn 2>/dev/null; then
+        echo "  FAIL CARN: tool error"; ALL_FAIL=$((ALL_FAIL + 1)); return
+    fi
+    PASS=0; FAIL=0
+    for T in AKHBBOSS FINGRNT HBASE JEEP JET ORCUS PLYR RACKUP SHAWN TEXT THROW TITLE WARP; do
+        if diff "$BASE/$REFDIR/$T.TBL" "$T.TBL" >/dev/null 2>&1; then
+            PASS=$((PASS + 1)); echo "  PASS $T"
+        else
+            FAIL=$((FAIL + 1)); echo "  FAIL $T"
+        fi
+    done
+    if [ $FAIL -eq 0 ]; then
+        echo "  PASS CARN: $PASS/$((PASS+FAIL)) files"
+        ALL_PASS=$((ALL_PASS + 1))
+    else
+        echo "  FAIL CARN: $PASS/$((PASS+FAIL)) files"
+        ALL_FAIL=$((ALL_FAIL + 1))
+    fi
+}
+test_lod_workcarn
+
+# worksmash: Smash TV /OLD mode (LOADE.EXE 4.50 variant)
+test_lod worksmash refsmash ROBOY "MUTEXP MNTR FLATFACE FINGRNT GALAGAS COBRA" "/OLD /H"
 
 # BBPAL is palette-only (ASM> junkxxxx, no TBL output)
 # workht: misc.lod from NBA Jam/Hangtime (headerless, dual-bank)

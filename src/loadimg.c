@@ -1419,8 +1419,8 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
                     if (nf == IHDR_PAL && g.ihdr[ni].size == SZ_L) next_is_pal = 1;
                     break;
                 }
-                const char *hx = g.old_mode && !g.intel_hex ? ">%X" : (g.intel_hex ? "0%XH" : "0%xH");
-                const char *hx_comma = g.old_mode && !g.intel_hex ? ">%X," : (g.intel_hex ? "0%XH," : "0%xH,");
+                const char *hx = g.old_mode && !g.intel_hex ? ">%X" : (g.intel_hex ? "0%xH" : "0%xH");
+                const char *hx_comma = g.old_mode && !g.intel_hex ? ">%X," : (g.intel_hex ? "0%xH," : "0%xH,");
                 if (next_is_pal && g.old_mode && !g.sagpal_combined) {
                     /* /OLD: SAG and PAL on separate .long lines (Trog style) */
                     if (ie->sag_is_cached)
@@ -1569,6 +1569,7 @@ static void parse_addr(const char *line) {
     int bank = 0;
     sscanf(line + 4, "%lx,%lx,%d", &addr, &end, &bank);
     if (addr == 0) sscanf(line + 4, "%lx", &addr);
+    fprintf(stderr, "PARSE_ADDR: line=[%s] addr=0x%lx end=0x%lx bank=%d\n", line+4, addr, end, bank);
     g.base_addr = (uint32_t)addr;
     g.end_addr = (uint32_t)end;
     g.bank = bank;
@@ -1984,7 +1985,8 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
                       dedup_table[di].sizx == cp.sizx && dedup_table[di].sizy == cp.sizy &&
                       dedup_table[di].ctrl == cp.ctrl &&
                       dedup_table[di].sum2 == ck2 &&
-                      dedup_table[di].anix == rec->anix) {
+                      dedup_table[di].anix == rec->anix &&
+                     (g.old_mode == 2 || dedup_table[di].aniy == rec->aniy)) {
                       /* Verify with byte-per-byte comparison */
                       if (dedup_table[di].pix && dedup_table[di].pix_stride == pstride &&
                           dedup_table[di].pix_h == rec->h &&
@@ -2799,7 +2801,7 @@ static void process_lod(const char *lod_path) {
                     uint16_t ctrl = (uint16_t)(((img_bpp[di] == 8 ? 0 : img_bpp[di]) << 12) | (img_tm[di] << 10) |
                                                 (img_lm[di] << 8) | (img_cmp[di] ? 0x80 : 0));
                     static int first_bgnd = 1;
-                    const char *hx = g.old_mode && !g.intel_hex ? ">%X" : "0%XH";
+                    const char *hx = g.old_mode && !g.intel_hex ? ">%X" : "0%xH";
                     fprintf(g.bgnd_fp, "\t.word\t%d,%d%s\r\n", w, h, first_bgnd ? "\t;x size, y size" : "");
                     fprintf(g.bgnd_fp, "\t.long\t");
                     fprintf(g.bgnd_fp, hx, g.base_addr + img_sags[di]);
@@ -2888,7 +2890,7 @@ static void process_lod(const char *lod_path) {
                          n_blk++;
                      }
                        /* Output in BDB file order (no sorting) */
-                        const char *hx2 = g.old_mode && !g.intel_hex ? ">%X" : "0%XH";
+                        const char *hx2 = g.old_mode && !g.intel_hex ? ">%X" : "0%xH";
                         for (int bi = 0; bi < n_blk; bi++) {
                              if (bi == 0) {
                                 fprintf(g.bgnd_fp, "\t.word\t");
@@ -3027,8 +3029,9 @@ static void process_lod(const char *lod_path) {
         if (tf) {
             fseek(tf, 0, SEEK_END);
             fprintf(tf, "\t.TEXT\r\n");
-            if (!g.old_mode)
-                fputc(0x1a, tf);
+            fputc(0x1a, tf);
+            fprintf(tf, "\r\n");
+            fputc(0x1a, tf);
             fclose(tf);
         }
     }
@@ -3225,7 +3228,7 @@ int main(int argc, char *argv[]) {
 
     if (!lod_file[0]) { fprintf(stderr, "No LOD file specified.\n"); return 1; }
 
-    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: LOAD.EXE 4.50 has no CON> dedup */
+    if (g.old_mode == 1) g.dedup = 0;  /* /OLD1: LOAD.EXE 4.50 has no CON> dedup by default */
     /* /OLD2 (LOAD.EXE 4.65): dedup on with per-line scoping + ANIX/ANIY + memcmp verification */
 
     if (tbl_dir[0]) strncpy(g.tbldir, tbl_dir, MAX_PATH-1);
@@ -3397,8 +3400,9 @@ int main(int argc, char *argv[]) {
 
     if (g.asm_fp) {
         fprintf(g.asm_fp, "\t.TEXT\r\n");
-        if (!g.old_mode)
-            fputc(0x1a, g.asm_fp);
+        fputc(0x1a, g.asm_fp);
+        fprintf(g.asm_fp, "\r\n");
+        fputc(0x1a, g.asm_fp);
         fclose(g.asm_fp);
     }
     if (g.glo_fp) fclose(g.glo_fp);
