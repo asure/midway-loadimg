@@ -271,9 +271,87 @@ Reference files can be regenerated via `make regen` (requires DOSBox).
 
 ---
 
-## Reverse Engineering
+## LOAD Tool History
 
-The original **LOADW.EXE** (290 KB MZ executable, dated 5/25/94, Borland C++ 4.5) was decompiled with **Ghidra 12.0**. The binary contains COFF debug symbols preserving C function names and source file references (`load2.c`, `zcom.c`, `emm.c`, `ldbgnd2.c`).
+The Williams/Midway arcade toolchain evolved through several tool versions, each with different features and output formats. This project supports all of them.
+
+### LOAD.EXE 4.50 (4/27/90) — `/OLD` mode
+
+The original tool, used for **Narc** (1988) and **Trog** (1990). Pre-DMA2, targets DMA1 hardware.
+
+| Feature | Behavior |
+|---------|----------|
+| Compression | None (raw 8bpp, stride-aligned rows) |
+| Sprite dedup | Off (no CON>/COF> support) |
+| TBL format | SAG+PAL on same `.long` line, no CTRL field |
+| SIZX in TBL | Raw `rec->w` (not stride-aligned) |
+| RLC encoding | `RLC>` directive for 2bpp run-length (DMA1 4-color images) |
+| RLC bug | `while run > 0` emits malformed runs for remainders 1-3 (see `RLC.md`) |
+| IRW magic [0x20] | `0x0064024B` |
+| Trailer | `.TEXT` only (no 0x1a EOF byte) |
+| IRW version string | `"4.50 4/27/90"` |
+
+**Games:** Narc (`/OLD`), Trog (`/OLD`)
+
+### LOAD.EXE 4.50 variant (Smash TV)
+
+A later build of 4.50 used for **Smash TV** / **Total Carnage** prototypes. Same base tool but with sprite checksum dedup added.
+
+| Feature | Behavior |
+|---------|----------|
+| Sprite dedup | Checksum-based (ROM-confirmed: VHIT1R dedup against VHIT1) |
+| Anix/aniy in dedup | Not checked — dedup purely by pixel content |
+| SIZX in TBL | `IMG_STRIDE(w)` (stride-aligned) |
+| IRW magic [0x20] | `0x0064024B` |
+
+**Games:** Smash TV (`/OLD`, `loadsmash` branch)
+
+### LOAD.EXE 4.65 (9/3/91) — `/OLD2` mode
+
+Updated for **Total Carnage**. Adds checksum dedup with ANIX comparison.
+
+| Feature | Behavior |
+|---------|----------|
+| Sprite dedup | Checksum + memcmp + ANIX-only check |
+| SIZX in TBL | `IMG_STRIDE(w)` (stride-aligned) |
+| IRW magic [0x20] | `0x00640194` |
+| Trailer | `.TEXT` + `0x1a\x0d\x0a\x1a` |
+| IRW version string | `"4.65 9/3/91"` |
+
+**Games:** Total Carnage (`/OLD2`)
+
+### LOADW.EXE (5/25/94) — Modern mode
+
+The final tool, used for **Mortal Kombat 2**, **NBA Jam**, and later DMA2 games. Full compression, CTRL words, point tables, and checksum dedup.
+
+| Feature | Behavior |
+|---------|----------|
+| Compression | ZON (zero-run) / ZOF (uncompressed), DMA2 hardware decode |
+| Sprite dedup | Checksum-only (CON>/COF> toggles), no anix/aniy check |
+| TBL format | Full: SIZX, SIZY, ANIX, ANIY, SAG, CTRL, PAL, PWRD1-3, PT3Y |
+| Scales | Multi-scale encoding (full, ½, ¼, ⅛) via `*N` suffix |
+| SIZX in TBL | `OUT_STRIDE(w)` (depends on `/P` flag) |
+| IRW magic [0x20] | `0x00640194` |
+| Trailer | `.TEXT` + `0x1a` (single byte) |
+| IRW version string | `"03/14/95"` |
+
+**Games:** MK2, NBA Jam, NBA Jam TE, Hangtime
+
+### Feature Matrix
+
+| Feature | LOAD 4.50 | LOAD 4.50v | LOAD 4.65 | LOADW |
+|---------|:---------:|:----------:|:---------:|:-----:|
+| CLI flag | `/OLD` | `/OLD` | `/OLD2` | (none) |
+| Sprite dedup | ✗ | ✓ (pixel) | ✓ (ANIX) | ✓ (checksum) |
+| RLC encoding | ✓ | ✓ | ✗ | ✗ |
+| ZON compression | ✗ | ✗ | ✗ | ✓ |
+| CTRL/PWRD fields | ✗ | ✗ | ✗ | ✓ |
+| SIZX stride | raw `w` | `IMG_STRIDE` | `IMG_STRIDE` | `OUT_STRIDE` |
+| IRW magic | `0x024B` | `0x024B` | `0x0194` | `0x0194` |
+| IRW trailer | `.TEXT` | `.TEXT` | `.TEXT`+0x1a×2 | `.TEXT`+0x1a |
+| Test status | 20/21 | 0/6 (loadsmash) | 10/13 | 63/66 |
+
+## Reverse Engineering
 
 ### Key Decompiled Functions
 
