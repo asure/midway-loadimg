@@ -4,6 +4,8 @@ A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Elec
 
 **Supported games:** Mortal Kombat 2, NBA Jam, NBA Jam Tournament Edition, Hangtime, Trog (/OLD mode), Narc (/OLD mode).
 
+> **Smash TV / Total Carnage** (`ROBOY.LOD`): The `loadsmash` branch has ROM-verified dedup that makes SMASH TBLs pass. Switch to it with `git checkout loadsmash`, build, and use `/OLD /H` flags.
+
 ---
 
 ## Table of Contents
