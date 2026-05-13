@@ -246,9 +246,8 @@ typedef struct {
  *
  * File pointers:
  *   asm_fp  — current TBL assembly output (redirected by ASM>)
- *   glo_fp  — current GLO output (redirected by GLO>)
+ *   glo_fp  — current GLO output (IMGTBL.GLO by default, redirected by GLO>)
  *   pal_fp  — IMGPAL.ASM (always the main palette file)
- *   main_glo_fp — IMGTBL.GLO (never redirected — holds palette .globl)
  *   bgnd_fp / bgndpal_fp / bgndequ_fp — BGNDTBL/PAL/EQU (BBB> output)
  * ========================================================================= */
 
@@ -293,10 +292,10 @@ typedef struct {
     char     glo_file[MAX_PATH];
     char     pal_file[MAX_PATH];
     char     raw_file[MAX_PATH];
+    char     main_glo_path[MAX_PATH]; /* path to IMGTBL.GLO for ASM> reset */
 
     FILE     *asm_fp;
     FILE     *glo_fp;
-    FILE     *main_glo_fp;  /* IMGTBL.GLO (never redirected) */
     FILE     *pal_fp;
     FILE     *bgnd_fp;     /* BGNDTBL.ASM */
     FILE     *bgndpal_fp;  /* BGNDPAL.ASM */
@@ -1329,8 +1328,8 @@ static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual
     if (g.pal_fp)
         fprintf(g.pal_fp, "\r\n");
 
-    if (g.main_glo_fp)
-        fprintf(g.main_glo_fp, "\t.globl\t%s\r\n", pe->name);
+    if (g.glo_fp)
+        fprintf(g.glo_fp, "\t.globl\t%s\r\n", pe->name);
 }
 
 /* Get the value for an IHDR field for a given scale */
@@ -1507,9 +1506,8 @@ static void write_image_tbl(FILE *fp, ImageEntry *ie) {
 }
 
         static void write_global(const char *name) {
-     FILE *fp = g.main_glo_fp ? g.main_glo_fp : g.glo_fp;
-     if (!fp) return;
-     fprintf(fp, "\t.%s\t%s\r\n",
+     if (!g.glo_fp) return;
+     fprintf(g.glo_fp, "\t.%s\t%s\r\n",
              strcmp(name, "ENDMARKER") == 0 ? "global" : "globl", name);
  }
 
@@ -2079,13 +2077,11 @@ static void parse_imglist(const char *line, CurrentImg *cur, int n_scales_overri
           if (g.build_tables && g.asm_fp)
               write_image_tbl(g.asm_fp, ie);
 
-          /* Write .globl for each image. In /OLD mode, use the TBL label
+          /* Write .globl for each image. /OLD mode only: use the TBL label
            * name (without +META suffix) and only for main IMGTBL.ASM entries;
            * per-game TBL images don't get .globl in IMGTBL.GLO. */
-          if (g.glo_fp && (g.old_mode || strcmp(name, "ENDMARKER") == 0)) {
-              if (!g.old_mode) {
-                  write_global(name);
-              } else if (g.asm_path[0] && strstr(g.asm_path, "IMGTBL") != NULL) {
+          if (g.glo_fp && g.old_mode) {
+              if (g.asm_path[0] && strstr(g.asm_path, "IMGTBL") != NULL) {
                   const char *globl_name = ie->name[0] ? ie->name : name;
                   write_global(globl_name);
               }
@@ -2230,6 +2226,12 @@ static void process_lod(const char *lod_path) {
                      if (!g.asm_fp) die("cannot create %s", full);
                      strncpy(g.asm_path, full, MAX_PATH-1);
                      fseek(g.asm_fp, 0, SEEK_END);
+                     /* ASM> switch: reset current GLO to IMGTBL.GLO */
+                     if (g.build_tables && g.main_glo_path[0]) {
+                         if (g.glo_fp) fclose(g.glo_fp);
+                         g.glo_fp = fopen(g.main_glo_path, "a");
+                         if (!g.glo_fp) die("cannot reopen: %s", g.main_glo_path);
+                     }
                       if (ftell(g.asm_fp) == 0) {
                           if (g.old_mode) {
                               char *fn = basename_p(full);
@@ -2317,9 +2319,6 @@ static void process_lod(const char *lod_path) {
                 if ((g.irw_bit / 8) & 1) irw_write_byte(0);
                 if (g.build_tables && g.asm_fp) {
                     fprintf(g.asm_fp, "%s\t.set\t0%xh\r\n", fname, g.base_addr + g.irw_bit);
-                }
-                if (g.glo_fp) {
-                    fprintf(g.glo_fp, "\t.globl\t%s\r\n", fname);
                 }
                 uint32_t sag = g.irw_bit;
                 uint8_t *buf = (uint8_t*)malloc(bsz);
@@ -3290,23 +3289,24 @@ int main(int argc, char *argv[]) {
         strncpy(irw_path, irw_name, MAX_PATH-1);
 
     if (g.build_tables) {
-        g.asm_fp = fopen(asm_path, "w");
+        g.asm_fp = fopen(asm_path, g.append ? "a" : "w");
         if (!g.asm_fp) die("cannot create: %s", asm_path);
-        if (g.old_mode && !g.intel_hex) {
-            fprintf(g.asm_fp, "\t.FILE 'imgtbl.asm'\r\n");
-            fprintf(g.asm_fp, "\t.OPTION B,D,L,T\r\n");
-            fprintf(g.asm_fp, "\r\n");
-            fprintf(g.asm_fp, "\t.include imgtbl.glo\r\n");
-            fprintf(g.asm_fp, "\t.DATA\r\n");
-            fprintf(g.asm_fp, "\t.even\r\n");
-        } else {
-            write_tbl_header(g.asm_fp);
+        if (!g.append) {
+            if (g.old_mode && !g.intel_hex) {
+                fprintf(g.asm_fp, "\t.FILE 'imgtbl.asm'\r\n");
+                fprintf(g.asm_fp, "\t.OPTION B,D,L,T\r\n");
+                fprintf(g.asm_fp, "\r\n");
+                fprintf(g.asm_fp, "\t.include imgtbl.glo\r\n");
+                fprintf(g.asm_fp, "\t.DATA\r\n");
+                fprintf(g.asm_fp, "\t.even\r\n");
+            } else {
+                write_tbl_header(g.asm_fp);
+            }
         }
+        strncpy(g.main_glo_path, glo_path, MAX_PATH-1);
         g.glo_fp = fopen(glo_path, g.append ? "a" : "w");
         if (!g.glo_fp) die("cannot create: %s", glo_path);
-        g.main_glo_fp = fopen(glo_path, g.append ? "a" : "w");
-        if (!g.main_glo_fp) die("cannot create main GLO: %s", glo_path);
-        g.pal_fp = fopen(pal_path, g.append ? "a" : "w+");
+        g.pal_fp = fopen(pal_path, g.append ? "a+" : "w+");
         if (!g.pal_fp) die("cannot create: %s", pal_path);
         if (!g.append) {
             if (g.old_mode)
@@ -3356,22 +3356,24 @@ int main(int argc, char *argv[]) {
             }
         }
         if (need_write) {
-            FILE *imgasm_fp = fopen(imgasm_path, "w");
+            FILE *imgasm_fp = fopen(imgasm_path, g.append ? "a" : "w");
             if (imgasm_fp) {
-                if (g.old_mode) {
-                    fprintf(imgasm_fp, "\t.FILE 'imgtbl.asm'\r\n");
-                    fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
-                    fprintf(imgasm_fp, "\r\n");
-                    fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
-                    fprintf(imgasm_fp, "\t.DATA\r\n");
-                    fprintf(imgasm_fp, "\t.even\r\n");
-                } else {
-                    fprintf(imgasm_fp, "\t.FILE \"imgtbl.asm\"\r\n");
-                    fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
-                    fprintf(imgasm_fp, "\r\n");
-                    fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
-                    fprintf(imgasm_fp, "\t.DATA\r\n");
-                    fprintf(imgasm_fp, "\t.even\r\n");
+                if (!g.append) {
+                    if (g.old_mode) {
+                        fprintf(imgasm_fp, "\t.FILE 'imgtbl.asm'\r\n");
+                        fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
+                        fprintf(imgasm_fp, "\r\n");
+                        fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
+                        fprintf(imgasm_fp, "\t.DATA\r\n");
+                        fprintf(imgasm_fp, "\t.even\r\n");
+                    } else {
+                        fprintf(imgasm_fp, "\t.FILE \"imgtbl.asm\"\r\n");
+                        fprintf(imgasm_fp, "\t.OPTION B,D,L,T\r\n");
+                        fprintf(imgasm_fp, "\r\n");
+                        fprintf(imgasm_fp, "\t.include imgtbl.glo\r\n");
+                        fprintf(imgasm_fp, "\t.DATA\r\n");
+                        fprintf(imgasm_fp, "\t.even\r\n");
+                    }
                 }
                 if (!g.old_mode && g.n_glo_files > 0)
                     fprintf(imgasm_fp, "\r\n");
@@ -3433,7 +3435,6 @@ int main(int argc, char *argv[]) {
         fclose(g.asm_fp);
     }
     if (g.glo_fp) fclose(g.glo_fp);
-    if (g.main_glo_fp) fclose(g.main_glo_fp);
     if (g.pal_fp) {
         fseek(g.pal_fp, 0, SEEK_END);
         long pos = ftell(g.pal_fp);

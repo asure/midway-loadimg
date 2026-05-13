@@ -316,7 +316,8 @@ LOADW supports toggling checksum dedup mid-LOD. Our implementation:
 The `FRM>` directive loads a `.BIN` file (compressed movie footage) and writes
 its raw bytes directly into the IRW bitstream. No compression is applied to
 the .BIN data. A `.set` TBL entry is generated with `base_addr + irw_bit`
-offset, and a `.globl` symbol is emitted to `IMGTBL.GLO`.
+offset. No `.globl` is emitted — FRM entries have no palette data, and
+the game code references the TBL directly.
 
 ## BBB> Directive
 

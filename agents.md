@@ -423,7 +423,7 @@ entry 0 (!STAND2) is accessed via `pttbls0 = pal_end + 6` (always actual PTTBL s
 - **CMP=0 fallback:** When `sizx < 10` or `comp_bits >= raw_bits`, compression is disabled (CMP=0). The sizx < 10 check matches LOADW's "Need 10 non-zero pixels minimum" — if the image is narrower than 10 pixels, the minimum-stored=10 adjustment consumes the entire row.
 - **Space check:** Uses `<=` comparison — CMP=0 when compressed size >= raw size. If equal, compression is disabled (not worth encoding).
 - **Per-image bpp:** When `PPP>` is not set, bpp is computed from the image's maximum pixel value (auto pixel packing). This is done per-image during encoding, not from the palette size.
-- **FRM> directive:** Loads a `.BIN` file (compressed movie footage), writes raw bytes to IRW without compression. Generates a `.set` TBL entry with `base_addr + irw_bit` offset and a `.globl` symbol.
+- **FRM> directive:** Loads a `.BIN` file (compressed movie footage), writes raw bytes to IRW without compression. Generates a `.set` TBL entry with `base_addr + irw_bit` offset. No `.globl` emitted — game code references TBL directly, and FRM data has no palette.
 - **BBB> directive:** Loads `.BDB` + `.BDD` background files, encodes images using the same FUN_1000_6f20 algorithm, writes to BGNDTBL.ASM/PAL/GLO/EQU files. See `bbb.md`.
 - **Checksum dedup (CON>/COF>):** Uses DWORD-based `loadw_checksum()` (sum as uint32 + max over byte-pairs), matching `FUN_1854_35fc`. Table resets on IMG change (new `.IMG` file loaded). Up to 4096 entries keyed by `{sum, max_val, sizx, sizy, ctrl}`.
 - **ASM> append mode:** When the same TBL filename is used multiple times (e.g. via `ASM>` directive in different LOD sections), output is appended rather than overwritten. Controlled by the `/A` flag on the command line.
@@ -583,7 +583,7 @@ consecutive `:W` fields share a `.word` line matching LOADW's output.
 | PT pairs | ✓ | Computed from geometry when stored fields zero; stored values used otherwise |
 | Scale format | ✓ | SAG:L + CTRL:W only |
 | .TEXT trailer | ✓ | `\t.TEXT\r\n` + `0x1a` EOF marker |
-| Palette (.globl) | ✓ | `main_glo_fp` for IMGTBL.GLO (never redirected) |
+| Palette (.globl) | ✓ | `g.glo_fp` (current GLO — IMGTBL.GLO by default, redirected by `GLO>`; `ASM>` resets to IMGTBL.GLO) |
 | IRW header | ✓ | Date, n_images, bpp, total_size |
 | FUN_1000_6f20 (LM/TM) | ✓ | Error-minimizing, 120 cap, `else if` for trail, minimum stored=10 |
 | PTTBL struct | ✓ | 40-byte struct at 40-byte stride from 12-byte dense file data |
@@ -603,7 +603,9 @@ consecutive `:W` fields share a `.word` line matching LOADW's output.
 | BBB object matching | ✓ | First-fit by BDB order, inclusive bounds `x+w-1 ≤ de` |
 | BBB BLKS/BMOD output | ✓ | Exact match with LOADW reference |
 | FRM> directive | ✓ | Loads .BIN files, writes raw to IRW with .set TBL entries |
-| IMGTBL.ASM generation | ✓ | Wrapper including all GLO> files |
+| IMGTBL.ASM generation | ✓ | Wrapper including all GLO> files (modern); direct image entries (`/OLD`) |
+| GLO> redirect | ✓ | Closes current GLO, opens new; `ASM>` resets to IMGTBL.GLO |
+| FRM> .globl | ✗ | Removed — FRM entries have no palette, game code uses TBL directly |
 | IMGPAL.ASM formatting | ✓ | Header, `%3d` count, conditional hex width |
 | CON>/COF> dedup | ✓ | 16-bit checksum, shared dedup_table |
 | ASM> append mode | ✓ | Same TBL filename appends via `/A` flag |
@@ -630,13 +632,13 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 
 | Test | Mode | Result | Notes |
 |------|------|--------|-------|
-| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | |
-| **MK3MIL** | ZOF | **PASS** (5/5) | |
-| **MK4MIL** | ZON | **PASS** (6/6) | |
-| **MK5MIL** | ZON | **PASS** (7/7) | |
-| **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
-| **MK7MIL** | Mixed | FAIL (10/11) | BGNDTBL.GLO has extra ENDMARKER entry |
-| **MK8MIL** | FRM | **PASS** (1/1) | |
+| **MK2MIL** | ZON + ZOF | **PASS** (8/8) | + IMGTBL.ASM, IMGPAL.ASM, IMGTBL.GLO |
+| **MK3MIL** | ZOF | **PASS** (8/8) | + globals |
+| **MK4MIL** | ZON | **PASS** (9/9) | + globals |
+| **MK5MIL** | ZON | **PASS** (10/10) | + globals |
+| **MK6MIL** | ZON/ZOF | **PASS** (20/20) | + globals |
+| **MK7MIL** | Mixed | FAIL (13/14) | All globals pass; pre-existing TBL failure |
+| **MK8MIL** | FRM | **PASS** (4/4) | + globals |
 | **BB** | ZOF+XON | **PASS** (2/2) | |
 | **BB2** | ZOF+XON | **PASS** (3/3) | |
 | **BB3** | ZOF+PT | **PASS** (2/2) | |

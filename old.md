@@ -184,7 +184,7 @@ The `reftrog/` directory contains LOAD.EXE reference output for Trog:
 | `TROGSPRG.TBL` | Sprite program table | ALL SAGs MATCH |
 | `TROGWHL.TBL` | Wheel table | ALL SAGs MATCH |
 | `TROGTEXT.TBL` | Text table | ALL SAGs MATCH |
-| `IMGTBL.GLO` | Global symbols | .globl entries missing (not yet implemented) |
+| `IMGTBL.GLO` | Global symbols | PASS — matches ref word-for-word |
 | `BGNDTBL.GLO` | Background globals | PASS |
 | `IMGASEQ.ASM` | Animation sequences | Not yet generated (SEQ format needs research) |
 | `IMGSRC.ASM` | Raw pixel source data | Not yet generated |
