@@ -1017,7 +1017,7 @@ done
 #### Reference File Locations
 | Directory | Content |
 |-----------|---------|
-| `loadimg/work3/` | MK7MIL reference (images + backgrounds) |
+| `loadimg/work5/` | MK7MIL reference (images + backgrounds) |
 | `loadimg/ref2/` | MK2MIL reference (images only, no BBB) |
 | `loadimg/binary/LOADW.EXE` | Original MS-DOS LOADW binary |
 

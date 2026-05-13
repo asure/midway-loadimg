@@ -257,8 +257,8 @@ as regular sprites:
 - `bdd.md` — BDD/BDB format reference in this project
 - `load2.hlp` — Original LOAD2 documentation (BBB> section)
 - `src/loadimg.c` — BBB> handler at `process_lod()` (~400 lines)
-- `work3/BGNDTBL.ASM` — Reference output from LOADW (MK7MIL.LOD, NUPOOL first)
-- `work3/LOG_V5.TXT` — LOADW verbose log for MK7MIL.LOD run
+- `work5/BGNDTBL.ASM` — Reference output from LOADW (MK7MIL.LOD, NUPOOL first)
+- `work5/LOG_V5.TXT` — LOADW verbose log for MK7MIL.LOD run
 
 ---
 
