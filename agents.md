@@ -377,7 +377,9 @@ Background images use the same compression algorithm as regular sprites
 | `work5/` | MKBBB.LOD | Test LOD with BDB/BDD files |
 | `ref2/`..`ref8/` | MKxMIL.LOD | Sprite-only reference outputs |
 
-Generation: `loadimg work5/MKBBB.LOD /P /T /V`; LOADW ref via DOSBox (see agents.md).## loadimg Tool — Command Line
+Generation: `loadimg work5/MKBBB.LOD /P /T /V`; LOADW ref via DOSBox (see agents.md).
+
+## loadimg Tool — Command Line
 
 ```
 loadimg <lod_file> [flags]
@@ -392,7 +394,7 @@ loadimg <lod_file> [flags]
   /L        Align to 16-bit boundary
   /B        Derive bpp from palette size
   /3        Limit scales to 3
-  /A        Append mode for GLO file
+  /A        Append mode — don't truncate existing TBL/PAL/GLO/ASM files
 ```
 
 Output filenames are derived from the LOD file's base name (uppercased):
@@ -472,7 +474,7 @@ Skip `seqcnt` SEQSCR entries then `scrcnt` SEQSCR entries (scripts use the same 
 
 | File | Description |
 |------|-------------|
-| `loadimg/src/loadimg.c` | Main implementation (2001 lines) |
+| `loadimg/src/loadimg.c` | Main implementation |
 | `loadimg/load2.hlp` | Original LOAD2 documentation |
 | `loadimg/DMA2.DOC` | DMA2 CTRL word documentation |
 | `loadimg/lod/YOK_HIT.IMG` | Reference IMG container (126 images, 4 palettes) |
@@ -583,7 +585,7 @@ consecutive `:W` fields share a `.word` line matching LOADW's output.
 | PWRD | ✓ | From IMG_REC anix2/aniy2/aniz2 |
 | PT pairs | ✓ | Computed from geometry when stored fields zero; stored values used otherwise |
 | Scale format | ✓ | SAG:L + CTRL:W only |
-| .TEXT trailer | ✓ | `\t.TEXT\r\n` + `0x1a` EOF marker |
+| .TEXT trailer | ✓ | Modern: `.TEXT`+0x1a; /OLD1: `.TEXT` only; /OLD2: `.TEXT`+0x1a×2 |
 | Palette (.globl) | ✓ | `g.glo_fp` (current GLO — IMGTBL.GLO by default, redirected by `GLO>`; `ASM>` resets to IMGTBL.GLO) |
 | IRW header | ✓ | Date, n_images, bpp, total_size |
 | FUN_1000_6f20 (LM/TM) | ✓ | Error-minimizing, 120 cap, `else if` for trail, minimum stored=10 |
@@ -720,7 +722,7 @@ encoder is correct for those datasets.
 
 | Directory | Content |
 |-----------|---------|
-| `work3/` | MK7MIL reference (images + background tables) |
+| `work5/` | MK7MIL reference (images + background tables) |
 | `ref2/` | MK2MIL reference |
 | `ref3/` | MK3MIL reference |
 | `ref4/` | MK4MIL reference |
