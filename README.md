@@ -1,8 +1,12 @@
-# loadimg — Williams/Midway Arcade Image Loader
+# loadsmash — Smash TV / Total Carnage Image Loader (special branch)
+
+> **This is a special branch** optimized for **Smash TV** (`ROBOY.LOD`). It enables ROM-verified per-pixel dedup for `/OLD` mode at the cost of NARC1 compatibility.
+>
+> For the main branch with full test suite support (MK, NBA Jam, Trog, Narc, CARN), switch to `main`.
 
 A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Electronics Games Inc., 1993–1995) toolchain. Reads `.lod` script files and `.img` container files from arcade hardware and outputs `.tbl`/`.asm`/`.glo`/`.irw` files targeting the **TMS34020 GSP DMA2** graphics co-processor.
 
-**Supported games:** Mortal Kombat 2, NBA Jam, NBA Jam Tournament Edition, Hangtime, Trog (/OLD mode), Narc (/OLD mode).
+**Supported games:** Mortal Kombat 2, NBA Jam, NBA Jam Tournament Edition, Hangtime, Smash TV (/OLD mode with dedup), Trog (/OLD mode), Narc (/OLD mode, partial).
 
 ---
 
@@ -214,7 +218,36 @@ Run `make test` from the build directory. Compares all TBL/ASM/GLO/IRW output ag
 cd build && make test
 ```
 
-### Current Results: 16 pass, 5 fail
+### Current Results (loadsmash branch): 12 pass, 9 fail
+
+*Note: SMASH TBLs now pass (MUTEXP, MNTR, FINGRNT). NARC1 regressed to 0/21 due to dedup changes.*
+
+| Test | Mode | Result | Notes |
+|------|------|--------|-------|
+| **MK2MIL** | ZON + ZOF | **PASS** (5/5) | |
+| **MK3MIL** | ZOF | **PASS** (5/5) | |
+| **MK4MIL** | ZON | **PASS** (6/6) | |
+| **MK5MIL** | ZON | **PASS** (7/7) | |
+| **MK6MIL** | ZON/ZOF | **PASS** (17/17) | |
+| **MK7MIL** | Mixed | FAIL (10/11) | BGNDTBL.GLO ENDMARKER |
+| **MK8MIL** | FRM | **PASS** (1/1) | |
+| **BB** | ZOF+XON | **PASS** (2/2) | |
+| **BB2** | ZOF+XON | **PASS** (3/3) | |
+| **BB3** | ZOF+PT | **PASS** (2/2) | |
+| **BB4** | ZOF+XON | **PASS** (1/1) | |
+| **BB5** | Mixed | **PASS** (7/7) | |
+| **BB6** | Mixed | **PASS** (6/6) | |
+| **BB7** | Mixed | FAIL (15/16) | OUTDOOR LEAF8 dedup (unused, inconsequential) |
+| **BB8** | XON | **PASS** (3/3) | |
+| **BBMUG** | ZOF+XON | **PASS** (2/2) | |
+| **BBVDA** | VDA | **PASS** (1/1) | |
+| **TROG** | /OLD | FAIL (12/15) | 9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO pass |
+| **NARC1** | /OLD | FAIL (0/21) | Regressed — font dedup disabled on this branch |
+| **CARN** | /OLD2 | FAIL (10/13) | JET/TEXT/TITLE cosmetic SIZX diffs |
+| **ROBOY** | /OLD | FAIL (3/6) | MUTEXP, MNTR, FINGRNT pass (ROM-verified dedup) |
+| **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
+
+### Original main branch results: 16 pass, 6 fail
 
 | Test | Mode | Result | Notes |
 |------|------|--------|-------|
