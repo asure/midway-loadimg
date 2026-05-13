@@ -99,3 +99,6 @@ with open("FIXED.IRW", "wb") as f:
   Its exact semantics are not yet fully understood.
 - The ROM address at `0x2C` can be in high address space (`0xFFF93000`, `0xFFF6BA30`)
   for files that map near the top of the MIPS address space.
+
+---
+

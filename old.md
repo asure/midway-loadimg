@@ -17,6 +17,7 @@ Enabled with the `/OLD` CLI flag. Changes behavior in several areas:
 | Default bpp | **8** (forced, LOAD.EXE behavior) | Auto-detected from max pixel value |
 | ZON/ZOF | Ignored (DMA1 has no compression) | Active |
 | Encode width | `IMG_STRIDE(w)` (always 4-byte aligned) | `OUT_STRIDE(w)` (depends on `/P`) |
+| TBL SIZX | `/OLD1`: raw `w`, `/OLD2`: `IMG_STRIDE(w)` | `OUT_STRIDE(w)` (depends on `/P`) |
 | SAG/PAL output | Combined on same `.long` line | Separate `.long` lines |
 | RLC> directive | Supported (2bpp RLE) | Not supported |
 | `+META` entries | Stripped for IMG lookup | Processed as-is |

@@ -107,3 +107,6 @@ All BB5 and BB6 PT0X issues are now resolved.
 4. **`img->ite_pttbl` saved**: Now set during `img_load` when heuristic fires. Was never set before.
 
 **Result:** BB5 6/7 → 7/7, BB6 5/6 → 6/6. Test suite: 14/7 → 16/5.
+
+---
+

@@ -182,19 +182,19 @@ are **per-image** (from the image's own table).
 
 The IRW is the output container for compressed (or uncompressed) GSP image data.
 
-### Header (0x44 bytes)
+### Header (0x44 bytes) — see `irw-header.md` for full spec
 
 | Offset | Size | Field | Notes |
 |--------|------|-------|-------|
-| `0x00` | 8 | Date string | ASCII date, NUL-padded (e.g. `"03/14/95"`) |
+| `0x00` | 8 | Date string | Always `"03/14/95"` for all modes (unified in v0.97) |
 | `0x08` | 24 | Reserved | Zero-filled |
-| `0x20` | 4 | Magic | Always `0x00640194` (little-endian) |
+| `0x20` | 4 | Magic | Always `0x00640194` (LE) — verified against ALL reference IRWs |
 | `0x24` | 8 | Reserved | Zero-filled |
-| `0x2C` | 4 | ROM address | Target ROM address (little-endian) |
-| `0x30` | 4 | Data size | Payload byte count, header-exclusive (little-endian) |
+| `0x2C` | 4 | ROM address | Target ROM address (LE) |
+| `0x30` | 4 | Data size | Payload byte count, header-exclusive (LE) |
 | `0x34` | 4 | Checksum | Sum of all uint16 LE words in payload, truncated to 32 bits. Trailing odd byte discarded. |
 | `0x38` | 4 | Constant | Always `0x00000004` |
-| `0x3C` | 2 | Type/flags | `0x0000`, `0x0001`, `0x0002`, or `0xFFFF` |
+| `0x3C` | 2 | Type/flags | `0x0000` (modern), `0xFFFF` (/OLD), `/OLD2` |
 | `0x3E` | 6 | Reserved | Zero-filled |
 
 ### Data Section (from offset 0x44)
@@ -649,10 +649,11 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **BBVDA** | VDA | **PASS** (1/1) | |
 | **TROG** | /OLD | FAIL (12/15) | 9 TBLs + IMGPAL + IMGTBL.GLO + BGNDTBL.GLO pass; BBB handler |
 | **NARC1** | /OLD | FAIL (20/21) | NARCMUGS buggy LOAD.EXE ref (accepted) |
-| **CARN** | /OLD2 | FAIL (0/13) | TUNG3 dedup collision cascades all SAGs |
+| **CARN** | /OLD2 | FAIL (10/13) | memcmp-verified dedup fixes RACKUP, FINGRNT. JET/TEXT/TITLE cosmetic SIZX diffs |
+| **ROBOY** | /OLD | FAIL (0/6) | Smash TV — use `loadsmash` branch for ROM-verified dedup |
 | **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
 
-**16 pass, 5 fail** (v0.96). WWF tests (MAIN, MISC) not yet in automated suite.
+**16 pass, 6 fail** (v0.97). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -795,7 +796,19 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 40. **PTTBL shared entry signed arithmetic (v0.95)** — `&pttbls[pttblnum-2]` for `pttblnum<2` is undefined behavior (negative array index). Replaced with `ptrdiff_t` offset-from-file-base arithmetic. Fixes BB5 CMP=1 cascade (3/7->6/7).
 41. **section_base_bit for continuous IRW (v0.95)** — Instead of resetting `g.irw_bit=0` at each `***>` directive, saves current bit position. Fixes SAG with two `***>` sections in Trog.
 42. **+META cache stores final TBL SAG (v0.95)** — Global cache stores `base_addr + relative_offset`, so cross-section hits get correct base address.
-43. **IRW header format update (v0.97)** — All IRW files now use the same 0x44-byte header: `"03/14/95"` version string, `0x00640194` magic at 0x20, ROM address at 0x2C, data-only size at 0x30, uint16 LE sum checksum at 0x34 (trailing odd byte discarded), `0x00000004` at 0x38, flags at 0x3C. See `irw-header.md` for the full spec.
+43. **IRW header format (v0.97)** — All IRW files now use the same 0x44-byte header: `"03/14/95"` version string (unified for all modes), `0x00640194` magic at 0x20, ROM address at 0x2C, data-only size at 0x30, uint16 LE sum checksum at 0x34 (trailing odd byte discarded), `0x00000004` at 0x38, flags at 0x3C (`0xFFFF` for /OLD modes). Verified against BIGSREC.EXE compatibility. See `irw-header.md`.
+
+44. **Dedup verification (v0.97)** — memcmp byte-for-byte verification added for /OLD2 mode to prevent checksum collision false dedups. Per-mode dedup behavior:
+    - **Modern (LOADW)**: checksum-only (original behavior, allows NULL pix data)
+    - **/OLD1 (LOAD.EXE 4.50)**: off by default (NARC1 and TROG don't use sprite dedup)
+    - **/OLD2 (LOAD.EXE 4.65)**: memcmp-verified with ANIX-only check. CARN uses this for BIGEYES dedup.
+    - The `loadsmash` branch enables /OLD1 dedup with origin-guarded memcmp for SMASH compatibility.
+
+45. **SMASH TV investigation (v0.97)** — ROM-based verification using u105+u89 EPROM dumps (de-interleaved) confirmed VHIT1R dedup against VHIT1, and GLOB6/SPLOTCH8 dedup. These have different ANIX/ANIY but identical pixel data. The `loadsmash` branch implements this dedup at the cost of NARC1 compatibility.
+
+46. **Trailer consistency (v0.97)** — `.TEXT` + `0x1a\x0d\x0a\x1a` for modern and /OLD2; `.TEXT` only for /OLD1. Matches original tool behavior per mode.
+
+47. **Test methodology (v0.97)** — `bash test.sh` run after EVERY change to prevent regressions. Stale binary detection: `touch src/loadimg.c && make -C build` forces recompile.
 
 ### COF and CON Directives
 

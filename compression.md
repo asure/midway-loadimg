@@ -377,3 +377,6 @@ Extracted via `strings` from `LOADW.EXE` at `loadimg/binary/`:
 | `_do_superbpp` | 0x52c0 | 1000:38c0 | "Super bpp" |
 | `_bits_filled` | 0x117ce | 100a:fdce | Bit counter |
 | `_color_average` | — | — | Color averaging |
+
+---
+

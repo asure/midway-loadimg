@@ -551,3 +551,6 @@ with an IT validity check to avoid false positives.
 | `binary/LOADW.EXE` | Original MS-DOS tool |
 | `compression.md` | Full algorithm reference |
 | `agents.md` | Implementation status and fix history |
+
+---
+

@@ -229,3 +229,6 @@ FUN_1000_6f20 uses a per-row table at `param_3 + 0x234`:
 - `/tmp/ghidra_bbb_decomp.txt` — FUN_1854_1a49 BBB handler decompilation (2125 lines)
 - `/tmp/bbb_label_analysis.txt` — BBB string cross-reference analysis
 - `/tmp/bbb_compression_analysis.txt` — BBB compression path analysis
+
+---
+

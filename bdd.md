@@ -214,3 +214,6 @@ TGA header fields used:
 | 14–15 | 2 | Height (LE) |
 | 16 | 1 | Pixel depth (must be 8) |
 | 17 | 1 | Image descriptor |
+
+---
+

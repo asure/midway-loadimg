@@ -248,3 +248,6 @@ EOF
 | TROG4.LOD | `worktrog/TROG4.LOD` | First-section-only LOD (for reference comparison) |
 | Reference files | `reftrog/*` | LOAD.EXE reference output |
 | Cascade docs | `cascade.md` | CMP=1 encoder cascade documentation |
+
+---
+
