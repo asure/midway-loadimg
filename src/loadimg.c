@@ -22,7 +22,7 @@
 #include <ctype.h>
 #include <math.h>
 
-#define VERSION "0.96"
+#define VERSION "0.98"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -293,6 +293,9 @@ typedef struct {
     char     pal_file[MAX_PATH];
     char     raw_file[MAX_PATH];
     char     main_glo_path[MAX_PATH]; /* path to IMGTBL.GLO for ASM> reset */
+    char     main_pal_path[MAX_PATH]; /* path to IMGPAL.ASM for PAL> reset */
+    int      n_pal_files;
+    char     pal_files[64][64];       /* PAL filenames opened this session */
 
     FILE     *asm_fp;
     FILE     *glo_fp;
@@ -1284,6 +1287,18 @@ static void write_tbl_header(FILE *fp) {
     fprintf(fp, "\t.DATA\r\n");
 }
 
+static void write_pal_header(FILE *fp) {
+    if (g.old_mode)
+        fprintf(fp, "\t.FILE 'imgpal.asm'\r\n");
+    else
+        fprintf(fp, "\t.FILE \"imgpal.asm\"\r\n");
+    fprintf(fp, "\t.OPTION B,D,L,T\r\n");
+    fprintf(fp, "\r\n");
+    fprintf(fp, "\t.include imgtbl.glo\r\n");
+    fprintf(fp, "\t.DATA\r\n");
+    fprintf(fp, "\t.even\r\n\r\n");
+}
+
 static void write_palette(PaletteEntry *pe, ImgFile *img, int palnum, int actual_idx) {
     if (pe->written) return;
     pe->written = 1;
@@ -2269,7 +2284,13 @@ static void process_lod(const char *lod_path) {
                 char full[MAX_PATH];
                 if (g.tbldir[0]) path_cat(full, g.tbldir, fname, MAX_PATH);
                 else strncpy(full, fname, MAX_PATH-1);
-                g.glo_fp = fopen(full, "a");
+                /* First open this session: truncate unless /A; subsequent: append */
+                {
+                    int first = 1;
+                    for (int gi = 0; gi < g.n_glo_files; gi++)
+                        if (strcmp(g.glo_files[gi], fname) == 0) { first = 0; break; }
+                    g.glo_fp = fopen(full, (!g.append && first) ? "w" : "a");
+                }
                 if (!g.glo_fp) die("cannot create %s", full);
                 /* Track GLO filename for IMGTBL.ASM generation (deduplicate) */
                 if (g.n_glo_files < 64) {
@@ -2282,6 +2303,32 @@ static void process_lod(const char *lod_path) {
                         g.n_glo_files++;
                     }
                 }
+            }
+        }
+        else if (!strncmp(upper, "PAL>", 4)) {
+            char fname[MAX_PATH];
+            sscanf(line + 4, " %255s", fname);
+            if (g.build_tables) {
+                if (g.pal_fp) fclose(g.pal_fp);
+                char full[MAX_PATH];
+                if (g.tbldir[0]) path_cat(full, g.tbldir, fname, MAX_PATH);
+                else strncpy(full, fname, MAX_PATH-1);
+                /* First open this session: truncate unless /A; subsequent: append */
+                {
+                    int first = 1;
+                    for (int pi = 0; pi < g.n_pal_files; pi++)
+                        if (strcmp(g.pal_files[pi], fname) == 0) { first = 0; break; }
+                    g.pal_fp = fopen(full, (!g.append && first) ? "w" : "a");
+                    if (first && g.n_pal_files < 64) {
+                        strncpy(g.pal_files[g.n_pal_files], fname, 63);
+                        g.pal_files[g.n_pal_files][63] = 0;
+                        g.n_pal_files++;
+                    }
+                }
+                if (!g.pal_fp) die("cannot create: %s", full);
+                fseek(g.pal_fp, 0, SEEK_END);
+                if (ftell(g.pal_fp) == 0)
+                    write_pal_header(g.pal_fp);
             }
         }
         else if (!strncmp(upper, "***>", 4)) parse_addr(line);
@@ -3146,14 +3193,14 @@ static void write_irw(const char *path) {
  * ========================================================================= */
 
 static void print_usage(const char *arg) {
-    printf("loadimg v%s — Williams/Midway arcade image loader\n", VERSION);
+    printf("loadimg v%s - Williams/Midway arcade image loader\n", VERSION);
     printf("Usage: loadimg <lod_file> [flags]\n");
     printf("\n");
     printf("Flags:\n");
     printf("  /R[=PATH]  Headerless raw IRW (no 0x44-byte header)\n");
     printf("  /T[=DIR]   Generate table files (.tbl/.asm/.glo)\n");
     printf("  /F[=DIR]   Raw file output directory\n");
-    printf("  /I PATH    Image source directory\n");
+    printf("  /I=PATH    Image source directory\n");
     printf("  /D=PATH    LOD file directory\n");
     printf("  /V         Verbose output\n");
     printf("  /E         Dual-banked image memory (ED adjustment)\n");
@@ -3304,21 +3351,13 @@ int main(int argc, char *argv[]) {
             }
         }
         strncpy(g.main_glo_path, glo_path, MAX_PATH-1);
+        strncpy(g.main_pal_path, pal_path, MAX_PATH-1);
         g.glo_fp = fopen(glo_path, g.append ? "a" : "w");
         if (!g.glo_fp) die("cannot create: %s", glo_path);
         g.pal_fp = fopen(pal_path, g.append ? "a+" : "w+");
         if (!g.pal_fp) die("cannot create: %s", pal_path);
-        if (!g.append) {
-            if (g.old_mode)
-                fprintf(g.pal_fp, "\t.FILE 'imgpal.asm'\r\n");
-            else
-                fprintf(g.pal_fp, "\t.FILE \"imgpal.asm\"\r\n");
-            fprintf(g.pal_fp, "\t.OPTION B,D,L,T\r\n");
-            fprintf(g.pal_fp, "\r\n");
-            fprintf(g.pal_fp, "\t.include imgtbl.glo\r\n");
-            fprintf(g.pal_fp, "\t.DATA\r\n");
-            fprintf(g.pal_fp, "\t.even\r\n\r\n");
-        }
+        if (!g.append)
+            write_pal_header(g.pal_fp);
     }
 
     g.irw_alloc = 1024 * 1024;

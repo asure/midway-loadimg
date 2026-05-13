@@ -28,6 +28,7 @@ A modern replacement for the MS-DOS **LOAD2.EXE** / **LOADW.EXE** (Williams Elec
 ### v0.98
 - **15 pass, 7 fail** — stable baseline. All modern (LOADW) tests pass except pre-existing MK7, BB7.
 - **GLO file rework** — Single `g.glo_fp` handle replaces dual `glo_fp`+`main_glo_fp` (fixes interleaved-write corruption — killed the `S_SZ` line). Palette globals follow the current GLO (IMGTBL.GLO by default, redirected by `GLO>`), with no duplicate entries. `ASM>` directive resets GLO back to IMGTBL.GLO. FRM entries no longer emit `.globl` (game code uses TBL directly, no palette data). ENDMARKER removed from modern-mode GLO output. All MK IMGTBL.GLO/IMGPAL.ASM/IMGTBL.ASM now match refs and included in test suite.
+- **`PAL>` directive added** — redirects palette color data output, symmetrical with `GLO>` and `ASM>`. Opens new PAL file, writes header if empty. Hangtime worked around the lack of this with batch-file `ren` commands per-LOD.
 - **`/A` append mode fixes** — `g.asm_fp` opens with `"a"` (was `"w"`, always truncated). `g.pal_fp` opens with `"a+"` (was `"w+"`, truncated). IMGTBL.ASM wrapper opens with `"a"` and skips header. Correctly appends to existing TBL/PAL/GLO/ASM files across multiple LOD runs.
 - **/OLD2 CARN 10/13** — Total Carnage: ORCUS, JET, SHAWN, RACKUP, HBASE, JEEP, TITLE, WARP, FINGRNT, PLYR, THROW, AKHBBOSS, MUTEXP all pass. JET/TEXT/TITLE have cosmetic SIZX diffs.
 - **memcmp-verified dedup** — Byte-for-byte verification catches false checksum collisions. Per-mode: modern (checksum-only), /OLD1 (off by default), /OLD2 (ANIX-only check with memcmp).
@@ -194,7 +195,7 @@ Each compressed row: 1 header byte `[trail_n:4][lead_n:4]` + stored pixels at `b
 
 ## The LOD/IMG Pipeline
 
-1. **LOD Parsing** — Text script with directives (`ZON>`, `ZOF>`, `CON>`, `COF>`, `PPP>`, `XON>`, `ASM>`, `GLO>`, `***>`, `FRM>`, `BBB>`, `--->`) controlling compression mode, dedup, bpp, and image selection.
+1. **LOD Parsing** — Text script with directives (`ZON>`, `ZOF>`, `CON>`, `COF>`, `PPP>`, `XON>`, `ASM>`, `GLO>`, `PAL>`, `***>`, `FRM>`, `BBB>`, `--->`) controlling compression mode, dedup, bpp, and image selection.
 
 2. **IMG Loading** — Binary container with `LIB_HDR` (28 bytes), `IMG_REC` records (50 bytes each, 42 for old format), `PAL_REC` records (26 bytes), optional SEQ/SCR blocks, and PTTBL (point table) entries (40 bytes each). Pixel data is 8-bit indexed, row-stride aligned to 4 bytes.
 

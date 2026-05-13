@@ -286,7 +286,8 @@ LOD files are text scripts processed line by line. Lines beginning with `;` or `
 | `ROM>`    | (ignored) |
 | `PPP>N`   | Force N bits per pixel (1–8); auto-detect if omitted |
 | `ASM> file` | Set output TBL assembly file |
-| `GLO> file` | Set output GLO globals file |
+| `GLO> file` | Set output GLO globals file (`.globl` declarations) |
+| `PAL> file` | Set output PAL palette data file (`.word` color arrays) |
 | `***> addr,end,bank` | Set base address for IRW encoding |
 | `IHDR field:size,...` | Define image header field layout |
 | `FRM> name` | Load `.BIN` file (compressed movie footage), write raw bytes to IRW |
@@ -605,6 +606,7 @@ consecutive `:W` fields share a `.word` line matching LOADW's output.
 | FRM> directive | ✓ | Loads .BIN files, writes raw to IRW with .set TBL entries |
 | IMGTBL.ASM generation | ✓ | Wrapper including all GLO> files (modern); direct image entries (`/OLD`) |
 | GLO> redirect | ✓ | Closes current GLO, opens new; `ASM>` resets to IMGTBL.GLO |
+| PAL> redirect | ✓ | Closes current PAL, opens new; writes header if file is new |
 | FRM> .globl | ✗ | Removed — FRM entries have no palette, game code uses TBL directly |
 | IMGPAL.ASM formatting | ✓ | Header, `%3d` count, conditional hex width |
 | CON>/COF> dedup | ✓ | 16-bit checksum, shared dedup_table |
@@ -653,9 +655,9 @@ BB* LODs are from **NBA Jam / Hangtime** arcade data.
 | **NARC1** | /OLD | FAIL (20/21) | NARCMUGS buggy LOAD.EXE ref (accepted) |
 | **CARN** | /OLD2 | FAIL (10/13) | memcmp-verified dedup fixes RACKUP, FINGRNT. JET/TEXT/TITLE cosmetic SIZX diffs |
 | **ROBOY** | /OLD | FAIL (0/6) | Smash TV — use `loadsmash` branch for ROM-verified dedup |
-| **MISC** | Dual-bank | **PASS** (21/21) | NBA Jam/Hangtime |
+| **MISC** | Dual-bank | FAIL (18/21) | 18 TBLs pass; global files differ from ref |
 
-**16 pass, 6 fail** (v0.97). WWF tests (MAIN, MISC) not yet in automated suite.
+**15 pass, 7 fail** (v0.98). WWF tests (MAIN, MISC) not yet in automated suite.
 
 **LM/TM mismatch note**: The FUN_1000_6f20 lead/trail analysis had a subtle bug
 (the trail loop used a separate `if (lead_done)` block instead of `else if`,
@@ -811,6 +813,14 @@ Each row is encoded as 1 header byte + stored pixels bit-packed at `bpp` bits ea
 46. **Trailer consistency (v0.97)** — `.TEXT` + `0x1a\x0d\x0a\x1a` for modern and /OLD2; `.TEXT` only for /OLD1. Matches original tool behavior per mode.
 
 47. **Test methodology (v0.97)** — `bash test.sh` run after EVERY change to prevent regressions. Stale binary detection: `touch src/loadimg.c && make -C build` forces recompile.
+
+48. **GLO file rework (v0.98)** — Single `g.glo_fp` replaces dual `glo_fp`+`main_glo_fp`, eliminating interleaved-write corruption. Palette globals follow current GLO (IMGTBL.GLO by default, redirected by `GLO>`), no duplicate entries. `ASM>` resets GLO to IMGTBL.GLO. FRM entries no longer emit `.globl` (game code uses TBL directly). ENDMARKER removed from modern-mode GLO output.
+
+49. **PAL> directive (v0.98)** — Redirects palette color data output, symmetrical with `GLO>` and `ASM>`. `PAL> filename` closes the current palette file and opens a new one, writing the standard IMGPAL header if the file is new. Works in both modern and `/OLD` modes. Previously, Hangtime worked around the lack of this with batch-file `ren` commands per-LOD.
+
+50. **`/A` append mode fixes (v0.98)** — `g.asm_fp` opens with `"a"` (was `"w"`, always truncated). `g.pal_fp` opens with `"a+"` (was `"w+"`, truncated). IMGTBL.ASM wrapper opens with `"a"` and skips header on append. Correctly appends to existing TBL/PAL/GLO/ASM files across multiple LOD runs.
+
+51. **GLO>/PAL> cross-run safety (v0.98)** — Per-game GLO and PAL files opened by `GLO>` and `PAL>` now truncate on first open this session when `/A` is not set, preventing accumulation from previous runs. Subsequent opens to the same file within a session still append (supporting multiple `GLO>`/`PAL>` to the same file within one LOD).
 
 ### COF and CON Directives
 

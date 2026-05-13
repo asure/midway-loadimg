@@ -481,7 +481,7 @@ with an IT validity check to avoid false positives.
 | **CARN** | 0/13 | TUNG3 dedup collision cascades all SAGs |
 | **MISC** | 21/21 PASS | — |
 
-**Overall: 16 pass, 5 fail** (v0.96)
+**Overall: 15 pass, 7 fail** (v0.98)
 
 ## Remaining Investigation Questions
 
