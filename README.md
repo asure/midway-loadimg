@@ -320,9 +320,9 @@ Updated for **Total Carnage**. Adds checksum dedup with ANIX comparison.
 
 **Games:** Total Carnage (`/OLD2`)
 
-### LOADW.EXE (5/25/94) — Modern mode
+### LOADW.EXE (11/13/92, 11/11/93, 5/25/94) — Modern mode
 
-The final tool, used for **Mortal Kombat 2**, **NBA Jam**, and later DMA2 games. Full compression, CTRL words, point tables, and checksum dedup.
+Three known builds, used for **NBA Jam** (11/13/92), **NBA Jam Tournament Edition** (11/11/93), and **Mortal Kombat 2** (5/25/94). Feature set is consistent across builds; the date reflects the tool binary's build date, not the game. Full compression, CTRL words, point tables, and checksum dedup.
 
 | Feature | Behavior |
 |---------|----------|
@@ -342,6 +342,8 @@ The final tool, used for **Mortal Kombat 2**, **NBA Jam**, and later DMA2 games.
 | Feature | LOAD 4.50 | LOAD 4.50v | LOAD 4.65 | LOADW |
 |---------|:---------:|:----------:|:---------:|:-----:|
 | CLI flag | `/OLD` | `/OLD` | `/OLD2` | (none) |
+| Build dates | 4/27/90 | ~1990 | 9/3/91 | 11/13/92, 11/11/93, 5/25/94 |
+| Games | Narc, Trog | Smash TV | Total Carnage | NBA Jam, MK2 |
 | Sprite dedup | ✗ | ✓ (pixel) | ✓ (ANIX) | ✓ (checksum) |
 | RLC encoding | ✓ | ✓ | ✗ | ✗ |
 | ZON compression | ✗ | ✗ | ✗ | ✓ |
