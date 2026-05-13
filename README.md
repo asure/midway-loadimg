@@ -320,9 +320,13 @@ Updated for **Total Carnage**. Adds checksum dedup with ANIX comparison.
 
 **Games:** Total Carnage (`/OLD2`)
 
-### LOADW.EXE (11/13/92, 11/11/93, 5/25/94) — Modern mode
+### Unknown tool (11/13/92, 11/11/93)
 
-Three known builds, used for **NBA Jam** (11/13/92), **NBA Jam Tournament Edition** (11/11/93), and **Mortal Kombat 2** (5/25/94). Feature set is consistent across builds; the date reflects the tool binary's build date, not the game. Full compression, CTRL words, point tables, and checksum dedup.
+Two intermediate builds between LOAD.EXE 4.65 and LOADW. IRW files with these dates exist for NBA Jam / NBA Jam TE, but the original EXEs have not been found. Feature set likely transitional — probably DMA2-era with compression.
+
+### LOADW.EXE (5/25/94) — Modern mode
+
+The final known tool, used for **Mortal Kombat 2**. Full DMA2 compression, CTRL words, point tables, and checksum dedup. This is the only modern-mode EXE we have (290 KB, Borland C++ 4.5), decompiled with Ghidra. The IRW date string `"5/25/94"` matches the binary timestamp.
 
 | Feature | Behavior |
 |---------|----------|
@@ -344,6 +348,7 @@ Three known builds, used for **NBA Jam** (11/13/92), **NBA Jam Tournament Editio
 | CLI flag | `/OLD` | `/OLD` | `/OLD2` | (none) |
 | Build dates | 4/27/90 | ~1990 | 9/3/91 | 11/13/92, 11/11/93, 5/25/94 |
 | Games | Narc, Trog | Smash TV | Total Carnage | NBA Jam, MK2 |
+| EXE we have | ✗ | ✗ | ✗ | 5/25/94 (LOADW.EXE) |
 | Sprite dedup | ✗ | ✓ (pixel) | ✓ (ANIX) | ✓ (checksum) |
 | RLC encoding | ✓ | ✓ | ✗ | ✗ |
 | ZON compression | ✗ | ✗ | ✗ | ✓ |
@@ -351,7 +356,7 @@ Three known builds, used for **NBA Jam** (11/13/92), **NBA Jam Tournament Editio
 | SIZX stride | raw `w` | `IMG_STRIDE` | `IMG_STRIDE` | `OUT_STRIDE` |
 | IRW magic | `0x024B` | `0x024B` | `0x0194` | `0x0194` |
 | IRW trailer | `.TEXT` | `.TEXT` | `.TEXT`+0x1a×2 | `.TEXT`+0x1a |
-| Test status | 20/21 | 0/6 (loadsmash) | 10/13 | 63/66 |
+| Test status | 20/21 | 0/6 (loadsmash) | 10/13 | ~63/66 |
 
 ## Reverse Engineering
 
