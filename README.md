@@ -111,6 +111,7 @@ loadimg <lod_file> [flags]
 
 | Flag | Effect |
 |------|--------|
+| `/R[=dir]` | Headerless raw IRW — no 0x44-byte header (optionally to directory) |
 | `/T[=dir]` | Build TBL/ASM/GLO table files (optionally to directory) |
 | `/F[=dir]` | Build IRW binary (optionally to directory) |
 | `/X` | Skip IRW generation (TBL only) |
